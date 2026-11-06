@@ -1,0 +1,53 @@
+{
+  "_doc": "Jeu de démonstration (mode --demo) : Usine de Brest, Groupe Mécanique Artois (fictif). Observations BRUTES uniquement : l'analyse est faite par le serveur. Les dates « @jours:-N » sont résolues à l'exécution (aujourd'hui - N jours).",
+  "reseaux": ["10.10.2.0/24"],
+  "hotes": [
+    {"ip": "10.10.2.1", "nom": "ROUTEUR-USINE", "type": "routeur", "os": {"nom": "Routeur de site"},
+     "ports": [{"port": 22, "service": "ssh", "produit": "OpenSSH", "version": "9.8p1"}, {"port": 443, "service": "https", "tls": ["TLSv1.2"]}]},
+    {"ip": "10.10.2.5", "nom": "SRV-USINE", "type": "serveur", "os": {"nom": "Windows Server 2012 R2", "version": "6.3", "build": "9600"},
+     "ports": [{"port": 80, "service": "http", "produit": "Microsoft IIS httpd", "version": "8.5"}, {"port": 135, "service": "msrpc"}, {"port": 139, "service": "netbios-ssn"}, {"port": 445, "service": "microsoft-ds"}, {"port": 3389, "service": "ms-wbt-server"}],
+     "smb": {"dialectes": ["NT LM 0.12 (SMBv1)", "2.0.2", "2.1", "3.0", "3.0.2"], "signature_requise": false},
+     "rdp_nla": true,
+     "inventaire": {
+       "correctifs": [{"kb": "KB5022899", "installe_le": "@jours:-410"}, {"kb": "KB5021294", "installe_le": "@jours:-470"}],
+       "antivirus": {"produit": "Microsoft Defender", "actif": true, "temps_reel": true, "signatures_age_jours": 2},
+       "politique_mdp": {"longueur_min": 6, "expiration_jours": 0, "seuil_verrouillage": 0},
+       "partages": [{"nom": "Production", "chemin": "D:/Production", "ecriture_tout_le_monde": true}, {"nom": "IPC$", "chemin": ""}],
+       "comptes": [{"nom": "Administrateur", "actif": true, "admin": true, "integre": true}, {"nom": "y.legoff", "actif": true, "admin": true}, {"nom": "atelier", "actif": true}, {"nom": "magasin", "actif": true}],
+       "sauvegardes": {"outil": "Sauvegarde Windows Server", "derniere": "@jours:-1", "nb_versions": 30, "externalisee": false, "dernier_test_restauration": null},
+       "journalisation": {"taille_max_mo": 20, "audit_connexions": true},
+       "logiciels": [{"nom": "Microsoft SQL Server 2014", "version": "12.0.6024"}, {"nom": "7-Zip 19.00 (x64)", "version": "19.00"}]
+     }},
+    {"ip": "10.10.2.8", "nom": "NAS-USINE", "type": "nas", "os": {"nom": "Système NAS constructeur", "version": "4.3"},
+     "ports": [{"port": 21, "service": "ftp", "produit": "vsftpd", "version": "3.0.3"}, {"port": 80, "service": "http", "http_auth_requise": true}, {"port": 443, "service": "https", "tls": ["TLSv1.0", "TLSv1.1"]}, {"port": 445, "service": "microsoft-ds"}, {"port": 5000, "service": "http"}],
+     "ftp_anonyme": true},
+    {"ip": "10.10.2.21", "nom": "PILOTAGE-L1", "type": "poste", "os": {"nom": "Windows 7 Professionnel", "version": "6.1", "build": "7601"},
+     "ports": [{"port": 135, "service": "msrpc"}, {"port": 139, "service": "netbios-ssn"}, {"port": 445, "service": "microsoft-ds"}, {"port": 502, "service": "modbus"}]},
+    {"ip": "10.10.2.22", "nom": "CHEF-ATELIER", "type": "poste", "os": {"nom": "Windows 11 Professionnel", "version": "23H2", "build": "22631"},
+     "ports": [{"port": 135, "service": "msrpc"}, {"port": 445, "service": "microsoft-ds"}],
+     "inventaire": {
+       "correctifs": [{"kb": "KB5034765", "installe_le": "@jours:-330"}],
+       "antivirus": {"produit": "Microsoft Defender", "actif": true, "temps_reel": true, "signatures_age_jours": 1},
+       "comptes": [{"nom": "Administrateur", "actif": false, "admin": true, "integre": true}, {"nom": "atelier", "actif": true, "admin": false}, {"nom": "admin", "actif": true, "admin": true}],
+       "logiciels": [{"nom": "Adobe Acrobat Reader DC", "version": "21.007.20099"}, {"nom": "Microsoft Office Professionnel Plus 2016", "version": "16.0.4266.1001"}]
+     }},
+    {"ip": "10.10.2.23", "nom": "MAGASIN-01", "type": "poste", "os": {"nom": "Windows 11 Professionnel", "version": "23H2", "build": "22631"},
+     "ports": [{"port": 135, "service": "msrpc"}, {"port": 139, "service": "netbios-ssn"}, {"port": 445, "service": "microsoft-ds"}],
+     "inventaire": {
+       "correctifs": [{"kb": "KB5044285", "installe_le": "@jours:-25"}],
+       "antivirus": {"produit": "Microsoft Defender", "actif": true, "temps_reel": true, "signatures_age_jours": 1},
+       "comptes": [{"nom": "magasin", "actif": true}],
+       "logiciels": [{"nom": "Adobe Acrobat Reader DC", "version": "21.007.20099"}]
+     }},
+    {"ip": "10.10.2.24", "nom": "QUALITE-PC", "type": "poste", "os": {"nom": "Windows 10 Professionnel", "version": "22H2", "build": "19045"},
+     "ports": [{"port": 135, "service": "msrpc"}, {"port": 445, "service": "microsoft-ds"}],
+     "inventaire": {
+       "correctifs": [{"kb": "KB5044273", "installe_le": "@jours:-40"}],
+       "antivirus": {"produit": "Antivirus constructeur", "actif": true, "temps_reel": true, "signatures_age_jours": 97}
+     }},
+    {"ip": "10.10.2.25", "nom": "BUREAU-USINE", "type": "portable", "os": {"nom": "Windows 11 Professionnel", "version": "23H2", "build": "22631"},
+     "ports": [{"port": 135, "service": "msrpc"}, {"port": 445, "service": "microsoft-ds"}]},
+    {"ip": "10.10.2.40", "nom": "IMPRIMANTE-ATELIER", "type": "imprimante", "os": {"nom": "Micrologiciel constructeur", "version": "2.1"},
+     "ports": [{"port": 80, "service": "http", "http_auth_requise": false}, {"port": 161, "proto": "udp", "service": "snmp"}, {"port": 9100, "service": "jetdirect"}]}
+  ]
+}
