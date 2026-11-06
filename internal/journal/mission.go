@@ -78,6 +78,8 @@ type Mission struct {
 	obs     *scan.Observations
 	fichier *os.File
 	occupe  bool
+	// profilLocal : profil choisi sur le poste (interface) ; vide = profil indiqué par le serveur.
+	profilLocal string
 }
 
 // Nouvelle prépare une mission ; `dossierJournaux` reçoit le journal lisible et la copie des
@@ -257,7 +259,7 @@ func (m *Mission) collecteReelle(ctx context.Context, pol scan.Politique) (*scan
 		len(cibles.Hotes), map[bool]string{true: " (limite atteinte)", false: ""}[cibles.Tronque]), 8)
 	obs := &scan.Observations{Mode: "reel", Reseaux: cibles.Reseaux}
 
-	profil, connu := scan.ProfilDepuis(pol.Profil)
+	profil, connu := scan.ProfilDepuis(m.profilEffectif(pol.Profil))
 	if !connu {
 		m.log(2, "erreur", fmt.Sprintf("Profil de scan inconnu (%q) : profil Standard appliqué.", pol.Profil), -1)
 	}
