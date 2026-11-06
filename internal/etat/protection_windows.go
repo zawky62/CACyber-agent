@@ -17,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -106,14 +108,11 @@ func securiserDossier(d string, existait bool) error {
 		return fmt.Errorf("identification du compte : %w", err)
 	}
 	if existait {
-		// Chemin passé entre apostrophes PowerShell (apostrophes internes doublées) : pas d'interprétation.
-		chemin := "'" + strings.ReplaceAll(d, "'", "''") + "'"
-		out, err := exec.Command(outilSysteme(filepath.Join("WindowsPowerShell", "v1.0", "powershell.exe")), "-NoProfile", "-NonInteractive",
-			"-Command", "(Get-Acl -LiteralPath "+chemin+").GetOwner([System.Security.Principal.SecurityIdentifier]).Value").Output()
+		// Propriétaire lu par l'API Windows (GetNamedSecurityInfo), sans lancer de processus.
+		proprio, err := proprietaire(d)
 		if err != nil {
 			return fmt.Errorf("lecture du propriétaire de %s : %w", d, err)
 		}
-		proprio := strings.TrimSpace(string(out))
 		if proprio != "S-1-5-18" && proprio != "S-1-5-32-544" && proprio != sid {
 			return fmt.Errorf("dossier %s pré-existant avec un propriétaire non fiable (%s) : refusé", d, proprio)
 		}
@@ -128,4 +127,20 @@ func securiserDossier(d string, existait bool) error {
 		return fmt.Errorf("ACL de %s non appliquée : %v (%s)", d, err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// proprietaire renvoie le SID (forme S-1-…) du propriétaire d'un fichier ou dossier.
+func proprietaire(chemin string) (string, error) {
+	sd, err := windows.GetNamedSecurityInfo(chemin, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return "", err
+	}
+	owner, _, err := sd.Owner()
+	if err != nil {
+		return "", err
+	}
+	if owner == nil {
+		return "", errors.New("propriétaire absent")
+	}
+	return owner.String(), nil
 }
