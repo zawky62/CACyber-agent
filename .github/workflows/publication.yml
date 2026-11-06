@@ -1,0 +1,81 @@
+# Publication de CACyber-Agent.exe SIGNÉ (dépôt public de l'agent).
+#
+# Déclenchement : étiquette de version « v* ». La compilation a lieu ICI, sur GitHub Actions, à partir du
+# dépôt public : SignPath vérifie cette origine (dépôt, branche, commit, tâche) avant de signer.
+# La clé de signature ne quitte jamais SignPath (HSM) : aucun secret de signature dans ce dépôt.
+#
+# Paramètres à créer dans GitHub (Settings > Secrets and variables > Actions) :
+#   secret   SIGNPATH_API_TOKEN          jeton de l'utilisateur CI SignPath
+#   variable SIGNPATH_ORGANIZATION_ID    identifiant de l'organisation SignPath
+#   variable SIGNPATH_PROJECT_SLUG       ex. cacyber-agent
+#   variable SIGNPATH_POLICY_SLUG        release-signing
+name: Publication signée
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # création de la version GitHub
+  actions: read
+
+jobs:
+  construire:
+    runs-on: windows-latest
+    outputs:
+      artifact-id: ${{ steps.televersement.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+      - name: Compilateur C (interface native Fyne, CGO)
+        shell: pwsh
+        run: if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) { choco install mingw -y --no-progress }
+      - name: Tests
+        run: go test ./...
+      - name: Ressources Windows (icône, version, manifeste)
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon internal/ui/icone-app.png --manifest gui `
+            --product-name "CACyber Agent" --product-version $v --file-version $v `
+            --file-description "CACyber - Agent d'audit de cybersecurite en lecture seule" --copyright "CACyber" `
+            --original-filename CACyber-Agent.exe --out rsrc
+      - name: Compilation
+        shell: pwsh
+        env: { CGO_ENABLED: "1", GOOS: windows, GOARCH: amd64 }
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$v" -o dist/CACyber-Agent.exe .
+      - name: Empreinte
+        shell: pwsh
+        run: (Get-FileHash dist/CACyber-Agent.exe -Algorithm SHA256).Hash | Out-File dist/CACyber-Agent.exe.sha256-non-signe
+      - id: televersement
+        uses: actions/upload-artifact@v4
+        with: { name: agent-non-signe, path: dist/CACyber-Agent.exe, if-no-files-found: error }
+
+  signer:
+    needs: construire
+    runs-on: ubuntu-latest
+    steps:
+      - name: Demande de signature SignPath (approbation manuelle)
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.construire.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signe
+      - name: Empreinte de l'exécutable signé
+        run: cd signe && sha256sum CACyber-Agent.exe > CACyber-Agent.exe.sha256
+      - name: Version GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            signe/CACyber-Agent.exe
+            signe/CACyber-Agent.exe.sha256
+          body: |
+            CACyber Agent ${{ github.ref_name }} — exécutable signé (SignPath Foundation).
+            Vérifiez l'empreinte SHA-256 et la signature (Propriétés > Signatures numériques) avant usage.

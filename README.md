@@ -1,5 +1,7 @@
 # CACyber-Agent
 
+> Licence **Apache-2.0** (voir `LICENSE`). Exécutables signés gratuitement : free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org) — voir la [politique de signature](CODE-SIGNING-POLICY.md).
+
 Agent de scan **en lecture seule** installé chez l'entité contrôlée. Un exécutable Windows unique et
 statique (`CACCyber-Agent.exe`, Go, bibliothèque standard uniquement, aucun dossier Python livré).
 
