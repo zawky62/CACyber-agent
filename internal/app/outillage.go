@@ -70,7 +70,7 @@ func (a *App) InstallerOutillage(ctx context.Context) error {
 	return nil
 }
 
-// InstallerOutillageEtAttendre installe (ou contrôle) osquery, Nuclei et les modèles, exécute
+// InstallerOutillageEtAttendre installe (ou contrôle) osquery, exécute
 // l'auto-test et consigne le bilan dans le journal local. Bloquant (CLI).
 func (a *App) InstallerOutillageEtAttendre(ctx context.Context, progres func(outils.Etape)) (*outils.Rapport, error) {
 	a.majOutillage(func(e *EtatOutillage) { *e = EtatOutillage{Statut: OutillageInstallation, Etape: "Préparation…"} })

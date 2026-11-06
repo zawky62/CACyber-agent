@@ -55,7 +55,8 @@ var hotesAutorises = map[string]bool{
 }
 
 // DossierParDefaut : %LOCALAPPDATA%\CACyber\outils (installation par utilisateur, sans droits
-// administrateur). Hors Windows : dossier de cache de l'utilisateur.
+// administrateur). Hors Windows : dossier de cache de l'utilisateur. JAMAIS le dossier temporaire
+// du système : aucun exécutable n'y est écrit (règle de sûreté et de compatibilité EDR).
 func DossierParDefaut() string {
 	if runtime.GOOS == "windows" {
 		if la := os.Getenv("LOCALAPPDATA"); la != "" {
@@ -65,12 +66,18 @@ func DossierParDefaut() string {
 	if c, err := os.UserCacheDir(); err == nil {
 		return filepath.Join(c, "CACyber", "outils")
 	}
-	return filepath.Join(os.TempDir(), "CACyber-outils")
+	if h, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(h, ".cacyber", "outils")
+	}
+	return "" // Nouveau() refusera une racine vide
 }
 
 // Nouveau prépare le gestionnaire. `securiser` applique l'ACL protégée au dossier racine (fournie
 // par le paquet etat, pour éviter une dépendance circulaire).
 func Nouveau(racine string, securiser func(string) error, progres func(Etape)) (*Gestionnaire, error) {
+	if racine == "" || !filepath.IsAbs(racine) {
+		return nil, errors.New("dossier de l'outillage indéterminé : chemin absolu requis")
+	}
 	if securiser != nil {
 		if err := securiser(racine); err != nil {
 			return nil, err
@@ -106,12 +113,7 @@ func verifierURL(u *url.URL) error {
 // Dossier d'installation d'un outil.
 func (g *Gestionnaire) Dossier(o Outil) string { return filepath.Join(g.Racine, o.Nom, o.Version) }
 
-// DossierModeles : modèles Nuclei de la liste blanche.
-func (g *Gestionnaire) DossierModeles() string {
-	return filepath.Join(g.Racine, "nuclei-modeles", strings.TrimPrefix(VersionModeles, "v"))
-}
-
-// Installer met en place osquery, Nuclei et les modèles Nuclei (idempotent : un composant déjà
+// Installer met en place osquery (idempotent : un composant déjà
 // présent et intègre n'est pas retéléchargé ; un composant altéré est réinstallé).
 func (g *Gestionnaire) Installer(ctx context.Context) ([]EtatOutil, error) {
 	var res []EtatOutil
@@ -124,11 +126,6 @@ func (g *Gestionnaire) Installer(ctx context.Context) ([]EtatOutil, error) {
 		}
 		res = append(res, e)
 	}
-	e, err := g.installerModeles(ctx)
-	if err != nil {
-		erreurs = append(erreurs, "modèles nuclei : "+err.Error())
-	}
-	res = append(res, e)
 	if len(erreurs) > 0 {
 		return res, errors.New(strings.Join(erreurs, " ; "))
 	}
@@ -146,11 +143,6 @@ func (g *Gestionnaire) Etat() []EtatOutil {
 		}
 		res = append(res, x.Etat("vérifié (empreinte"+map[bool]string{true: " et signature", false: ""}[x.Signataire != ""]+")"))
 		x.Fermer()
-	}
-	if err := g.verifierModeles(); err != nil {
-		res = append(res, EtatOutil{Nom: "nuclei-modeles", Version: VersionModeles, Licence: "MIT", Detail: err.Error()})
-	} else {
-		res = append(res, g.etatModeles("vérifiés"))
 	}
 	return res
 }
@@ -353,103 +345,6 @@ func ecrireProvenance(dossier string, o Outil) error {
 	return os.WriteFile(filepath.Join(dossier, "PROVENANCE.txt"), []byte(b.String()), 0o600)
 }
 
-// ----------------------------------------------------------------------------- modèles Nuclei
-
-func (g *Gestionnaire) installerModeles(ctx context.Context) (EtatOutil, error) {
-	if g.verifierModeles() == nil {
-		g.Progres(Etape{"nuclei-modeles", "Modèles Nuclei de la liste blanche déjà présents et intègres.", 100})
-		return g.etatModeles("déjà installés, intègres"), nil
-	}
-	g.Progres(Etape{"nuclei-modeles", fmt.Sprintf("Téléchargement de %d modèles Nuclei non intrusifs (%s)…", len(ModelesNuclei), VersionModeles), 0})
-	parent := filepath.Dir(g.DossierModeles())
-	if err := os.MkdirAll(parent, 0o700); err != nil {
-		return EtatOutil{}, err
-	}
-	travail, err := os.MkdirTemp(parent, ".modeles-")
-	if err != nil {
-		return EtatOutil{}, err
-	}
-	defer os.RemoveAll(travail)
-	tous := append(append([]Modele{}, ModelesNuclei...), LicenceModeles)
-	for i, m := range tous {
-		if !filepath.IsLocal(filepath.FromSlash(m.Chemin)) {
-			return EtatOutil{}, fmt.Errorf("chemin de modèle refusé : %s", m.Chemin)
-		}
-		tmp, err := g.telecharger(ctx, "modele-"+m.ID, baseModeles+m.Chemin, m.SHA256, 2<<20)
-		if err != nil {
-			return EtatOutil{}, err
-		}
-		cible := filepath.Join(travail, filepath.FromSlash(m.Chemin))
-		if err := os.MkdirAll(filepath.Dir(cible), 0o700); err == nil {
-			err = os.Rename(tmp, cible)
-		}
-		if err != nil {
-			_ = os.Remove(tmp)
-			return EtatOutil{}, err
-		}
-		g.Progres(Etape{"nuclei-modeles", "Modèle vérifié : " + m.ID, (i + 1) * 100 / len(tous)})
-	}
-	final := g.DossierModeles()
-	if err := os.RemoveAll(final); err != nil {
-		return EtatOutil{}, err
-	}
-	if err := os.Rename(travail, final); err != nil {
-		return EtatOutil{}, err
-	}
-	if err := g.verifierModeles(); err != nil {
-		return EtatOutil{}, err
-	}
-	return g.etatModeles("installés et vérifiés"), nil
-}
-
-// verifierModeles : chaque modèle de la liste blanche est présent avec l'empreinte attendue, et le
-// dossier ne contient AUCUN autre modèle (un fichier ajouté serait exécuté par Nuclei).
-func (g *Gestionnaire) verifierModeles() error {
-	racine := g.DossierModeles()
-	attendus := map[string]string{}
-	for _, m := range append(append([]Modele{}, ModelesNuclei...), LicenceModeles) {
-		attendus[filepath.Clean(filepath.FromSlash(m.Chemin))] = m.SHA256
-	}
-	vus := 0
-	err := filepath.WalkDir(racine, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("lien refusé dans les modèles : %s", p)
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(racine, p)
-		sha, ok := attendus[rel]
-		if !ok {
-			return fmt.Errorf("fichier inattendu dans les modèles : %s", rel)
-		}
-		got, err := empreinteFichier(p)
-		if err != nil {
-			return err
-		}
-		if got != sha {
-			return fmt.Errorf("modèle altéré : %s", rel)
-		}
-		vus++
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if vus != len(attendus) {
-		return fmt.Errorf("modèles incomplets (%d/%d)", vus, len(attendus))
-	}
-	return nil
-}
-
-func (g *Gestionnaire) etatModeles(detail string) EtatOutil {
-	return EtatOutil{Nom: "nuclei-modeles", Version: VersionModeles, Licence: "MIT", Source: baseModeles,
-		Chemin: g.DossierModeles(), Pret: true, Detail: fmt.Sprintf("%s — %d modèles en liste blanche", detail, len(ModelesNuclei))}
-}
-
 func empreinteFichier(p string) (string, error) {
 	f, err := os.Open(p)
 	if err != nil {
@@ -472,7 +367,6 @@ type Executable struct {
 	SHA256     string
 	Signataire string
 	f          *os.File
-	env        []string
 }
 
 // Preparer contrôle un outil géré juste avant son exécution : empreinte du binaire (lu au travers
@@ -487,15 +381,38 @@ func (g *Gestionnaire) Preparer(o Outil) (*Executable, error) {
 	if principal == nil {
 		return nil, fmt.Errorf("manifeste incomplet pour %s", o.Nom)
 	}
+	if len(o.Signataires) == 0 {
+		// Règle de sûreté : seuls des composants SIGNÉS par leur éditeur sont exécutés (reconnus comme
+		// légitimes par les antivirus et EDR du client).
+		return nil, fmt.Errorf("%s : composant non signé par son éditeur — exécution refusée", o.Nom)
+	}
+	// Copie officielle déjà installée sur le poste (ex. Program Files), si sa signature est valide :
+	// rien à télécharger. Toute version est admise, l'éditeur signataire faisant foi.
+	for _, c := range EmplacementsOfficiels(o) {
+		if x, err := preparerChemin(o, c, ""); err == nil {
+			return x, nil
+		}
+	}
 	chemin := filepath.Join(g.Dossier(o), o.Executable)
 	x, err := preparerChemin(o, chemin, principal.SHA256)
 	if err != nil {
 		return nil, err
 	}
-	if o.Nom == Nuclei.Nom {
-		x.env = g.environnementNuclei()
-	}
 	return x, nil
+}
+
+// EmplacementsOfficiels : emplacements d'installation officiels d'un outil (installateur de l'éditeur).
+func EmplacementsOfficiels(o Outil) []string {
+	if runtime.GOOS != "windows" || o.Nom != Osquery.Nom {
+		return nil
+	}
+	var res []string
+	for _, v := range []string{"ProgramFiles", "ProgramW6432"} {
+		if base := os.Getenv(v); base != "" {
+			res = append(res, filepath.Join(base, "osquery", "osqueryi.exe"))
+		}
+	}
+	return res
 }
 
 func preparerChemin(o Outil, chemin, sha string) (*Executable, error) {
@@ -529,30 +446,10 @@ func preparerChemin(o Outil, chemin, sha string) (*Executable, error) {
 	return x, nil
 }
 
-// environnementNuclei : configuration et cache de Nuclei confinés au dossier géré (aucune écriture
-// dans le profil de l'utilisateur, aucun téléchargement de modèles publics).
-func (g *Gestionnaire) environnementNuclei() []string {
-	base := filepath.Join(g.Racine, "nuclei-config")
-	_ = os.MkdirAll(base, 0o700)
-	env := []string{}
-	for _, v := range os.Environ() {
-		k := strings.ToUpper(strings.SplitN(v, "=", 2)[0])
-		if k == "APPDATA" || k == "LOCALAPPDATA" || k == "USERPROFILE" || k == "HOME" || k == "XDG_CONFIG_HOME" {
-			continue
-		}
-		env = append(env, v)
-	}
-	return append(env, "APPDATA="+base, "LOCALAPPDATA="+base, "USERPROFILE="+base, "HOME="+base,
-		"XDG_CONFIG_HOME="+base, "DISABLE_NUCLEI_TEMPLATES_PUBLIC_DOWNLOAD=true")
-}
-
 // Commande prépare l'exécution du binaire vérifié (arguments fournis par le code appelant, jamais
 // par une saisie libre).
 func (x *Executable) Commande(ctx context.Context, args ...string) *exec.Cmd {
 	c := exec.CommandContext(ctx, x.Chemin, args...)
-	if x.env != nil {
-		c.Env = x.env
-	}
 	c.Dir = filepath.Dir(x.Chemin)
 	sansFenetre(c)
 	return c

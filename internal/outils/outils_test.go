@@ -91,54 +91,19 @@ func TestSourcesOfficielles(t *testing.T) {
 	}
 }
 
-// Les modèles Nuclei de la liste blanche ne doivent JAMAIS être offensifs.
-func TestModelesNonIntrusifs(t *testing.T) {
-	for _, m := range ModelesNuclei {
-		if !strings.HasPrefix(m.Chemin, "ssl/") && !strings.HasPrefix(m.Chemin, "http/technologies/") &&
-			!strings.HasPrefix(m.Chemin, "http/misconfiguration/") {
-			t.Errorf("modèle hors des familles passives : %s", m.Chemin)
-		}
-		for _, mot := range []string{"cve", "exploit", "rce", "sqli", "xss", "brute", "default-login", "fuzz", "takeover", "dos"} {
-			if strings.Contains(strings.ToLower(m.Chemin), mot) {
-				t.Errorf("modèle suspect : %s", m.Chemin)
-			}
-		}
-		if len(m.SHA256) != 64 {
-			t.Errorf("empreinte manquante : %s", m.ID)
-		}
-	}
-	args := strings.Join(ArgumentsValidationNuclei("m"), " ")
-	for _, attendu := range []string{"-ni", "-duc", "-dut", "intrusive", "dos", "fuzz", "brute", "exploit", "code", "headless"} {
-		if !strings.Contains(args, attendu) {
-			t.Errorf("garde-fou Nuclei absent : %s", attendu)
-		}
-	}
-}
 
-// Un fichier ajouté au dossier des modèles (qui serait exécuté par Nuclei) est détecté.
-func TestModelesFichierInattendu(t *testing.T) {
-	g := &Gestionnaire{Racine: t.TempDir(), Progres: func(Etape) {}}
-	if err := os.MkdirAll(g.DossierModeles(), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	_ = os.WriteFile(filepath.Join(g.DossierModeles(), "malveillant.yaml"), []byte("id: x"), 0o600)
-	if err := g.verifierModeles(); err == nil || !strings.Contains(err.Error(), "inattendu") {
-		t.Fatalf("fichier inattendu non détecté : %v", err)
-	}
-}
-
-// Un binaire altéré est refusé avant exécution.
+// Un binaire altéré est refusé avant exécution (contrôle d'empreinte).
 func TestBinaireAltereRefuse(t *testing.T) {
-	g := &Gestionnaire{Racine: t.TempDir(), Progres: func(Etape) {}}
+	dir := t.TempDir()
 	o := Outil{Nom: "essai", Version: "1", Executable: "essai.exe",
 		Fichiers: []Fichier{{Dest: "essai.exe", SHA256: sha([]byte("original"))}}}
-	_ = os.MkdirAll(g.Dossier(o), 0o700)
-	_ = os.WriteFile(filepath.Join(g.Dossier(o), "essai.exe"), []byte("modifié"), 0o700)
-	if _, err := g.Preparer(o); err == nil || !strings.Contains(err.Error(), "NON CONFORME") {
+	chemin := filepath.Join(dir, "essai.exe")
+	_ = os.WriteFile(chemin, []byte("modifié"), 0o700)
+	if _, err := preparerChemin(o, chemin, o.Fichiers[0].SHA256); err == nil || !strings.Contains(err.Error(), "NON CONFORME") {
 		t.Fatalf("binaire altéré accepté : %v", err)
 	}
-	_ = os.WriteFile(filepath.Join(g.Dossier(o), "essai.exe"), []byte("original"), 0o700)
-	x, err := g.Preparer(o)
+	_ = os.WriteFile(chemin, []byte("original"), 0o700)
+	x, err := preparerChemin(o, chemin, o.Fichiers[0].SHA256)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +113,37 @@ func TestBinaireAltereRefuse(t *testing.T) {
 		if err := os.WriteFile(x.Chemin, []byte("substitution"), 0o700); err == nil {
 			t.Fatal("binaire modifiable entre vérification et exécution")
 		}
+	}
+}
+
+// Un composant non signé par son éditeur n'est JAMAIS exécuté, même à l'empreinte conforme.
+func TestComposantNonSigneRefuse(t *testing.T) {
+	g := &Gestionnaire{Racine: t.TempDir(), Progres: func(Etape) {}}
+	o := Outil{Nom: "essai", Version: "1", Executable: "essai.exe",
+		Fichiers: []Fichier{{Dest: "essai.exe", SHA256: sha([]byte("original"))}}}
+	_ = os.MkdirAll(g.Dossier(o), 0o700)
+	_ = os.WriteFile(filepath.Join(g.Dossier(o), "essai.exe"), []byte("original"), 0o700)
+	if _, err := g.Preparer(o); err == nil || !strings.Contains(err.Error(), "non signé") {
+		t.Fatalf("composant non signé accepté : %v", err)
+	}
+}
+
+// Tous les outils gérés exigent une signature d'éditeur.
+func TestOutilsGeresTousSignes(t *testing.T) {
+	for _, o := range Geres {
+		if len(o.Signataires) == 0 {
+			t.Errorf("%s : aucun signataire exigé", o.Nom)
+		}
+	}
+}
+
+// Aucun dossier d'outillage dans le dossier temporaire du système.
+func TestJamaisDansTemp(t *testing.T) {
+	if d := DossierParDefaut(); d != "" && strings.HasPrefix(strings.ToLower(d), strings.ToLower(os.TempDir())) {
+		t.Fatalf("outillage dans le dossier temporaire : %s", d)
+	}
+	if _, err := Nouveau("", nil, nil); err == nil {
+		t.Fatal("racine vide acceptée")
 	}
 }
 

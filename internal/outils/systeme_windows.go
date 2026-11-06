@@ -90,3 +90,14 @@ func lancerInstallateur(chemin string) error {
 func sansFenetre(c *exec.Cmd) {
 	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 }
+
+// DomaineJoint : vrai si le poste est membre d'un domaine Active Directory (NetGetJoinInformation).
+func DomaineJoint() bool {
+	var nom *uint16
+	var statut uint32
+	if err := windows.NetGetJoinInformation(nil, &nom, &statut); err != nil {
+		return false
+	}
+	defer windows.NetApiBufferFree((*byte)(unsafe.Pointer(nom)))
+	return statut == windows.NetSetupDomainName
+}

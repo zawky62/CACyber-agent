@@ -81,7 +81,7 @@ type Contexte struct {
 	Demo    bool                `json:"demo"`
 	Version string              `json:"version"`
 	Mission *journal.Instantane `json:"mission,omitempty"`
-	// Outillage : mise en place des outils open source (Nmap, osquery, Nuclei) et auto-test.
+	// Outillage : mise en place des outils open source (Nmap, osquery, signés par leur éditeur) et auto-test.
 	Outillage EtatOutillage `json:"outillage"`
 }
 

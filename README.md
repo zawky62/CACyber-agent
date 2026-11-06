@@ -91,7 +91,7 @@ CACCyber-Agent.exe --demo                           réseau simulé, appairage e
 | `--demo` | jeu de démonstration « Usine de Brest » |
 | `--cli` | mode console |
 | `--nmap CHEMIN` | exécutable Nmap (sinon `Program Files\Nmap`, puis PATH) ; signature de l'éditeur exigée sous Windows |
-| `--installer-outils` | installe et vérifie osquery, Nuclei et les modèles, exécute l'auto-test, écrit le bilan au journal |
+| `--installer-outils` | installe et vérifie osquery (signé par l'éditeur), exécute l'auto-test, écrit le bilan au journal |
 | `--etat-outils` | contrôle l'outillage (empreintes, signatures) sans rien télécharger |
 | `--installer-nmap` | télécharge l'installateur officiel de Nmap, le vérifie et l'ouvre en mode interactif (UAC) |
 | `--npcap` | ouvre la page officielle de Npcap (option des scans avancés) |
@@ -147,8 +147,12 @@ empreintes).
 - Sans Nmap, le scanner natif fournit les ports, les bannières et les versions TLS, mais pas les versions
   SMB négociées.
 
-**osquery et Nuclei** sont installés pour l'utilisateur courant, sans droits administrateur, dans
-`%LOCALAPPDATA%\CACyber\outils`. Les outils sont lancés sans fenêtre de console.
+**osquery** est utilisé depuis son installation officielle (Program Files) si elle est présente et
+signée, sinon installé pour l'utilisateur courant, sans droits administrateur, dans
+`%LOCALAPPDATA%\CACyber\outils`. Les outils sont lancés sans fenêtre de console. **Seuls des composants
+signés par leur éditeur sont exécutés** (Nmap, osquery) ; Nuclei n'est plus utilisé (binaire non
+signé, classé « hacktool » par plusieurs EDR) : ses contrôles passifs TLS / en-têtes HTTP sont
+intégrés à l'agent. Voir `docs/EDR-LISTE-AUTORISATION.md`.
 
 **Antivirus**
 - Une compilation **non signée** de l'agent peut être signalée par un antivirus. C'est arrivé une fois

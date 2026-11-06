@@ -31,10 +31,9 @@ var rxPortOuvert = regexp.MustCompile(`<port protocol="tcp" portid="(\d+)"><stat
 // AutoTest exécute des contrôles NON INTRUSIFS, limités au poste lui-même (127.0.0.1) :
 //   - Nmap : mini-scan « connect » de quelques ports de 127.0.0.1 (aucun autre hôte) ;
 //   - osquery : requête en lecture seule « select name, version from programs limit 5 » ;
-//   - Nuclei : version, puis validation des modèles de la liste blanche (aucune requête réseau).
 //
-// « Moteur de scan prêt » dès que Nmap OU le scanner natif est disponible ; osquery et Nuclei
-// enrichissent la collecte mais ne la conditionnent pas.
+// « Moteur de scan prêt » dès que Nmap OU le scanner natif est disponible ; osquery enrichit
+// la collecte mais ne la conditionne pas.
 func (g *Gestionnaire) AutoTest(ctx context.Context, nmapExplicite string) Rapport {
 	r := Rapport{Date: time.Now().Format(time.RFC3339)}
 	r.Composants = append(r.Composants, g.Etat()...)
@@ -52,13 +51,6 @@ func (g *Gestionnaire) AutoTest(ctx context.Context, nmapExplicite string) Rappo
 		r.Tests = append(r.Tests, ResultatTest{"osquery", false, err.Error()})
 	} else {
 		r.Tests = append(r.Tests, testOsquery(ctx, x))
-		x.Fermer()
-	}
-	// Nuclei
-	if x, err := g.Preparer(Nuclei); err != nil {
-		r.Tests = append(r.Tests, ResultatTest{"nuclei", false, err.Error()})
-	} else {
-		r.Tests = append(r.Tests, testNuclei(ctx, x, g.DossierModeles()))
 		x.Fermer()
 	}
 	r.Pret = true // le scanner natif intégré garantit toujours un moteur de découverte
@@ -120,31 +112,6 @@ func testOsquery(ctx context.Context, x *Executable) ResultatTest {
 		return ResultatTest{"osquery", false, "sortie JSON illisible"}
 	}
 	return ResultatTest{"osquery", true, fmt.Sprintf("inventaire en lecture seule opérationnel (%d logiciels lus)", len(lignes))}
-}
-
-var rxVersionNuclei = regexp.MustCompile(`Engine Version:\s*v?([\d.]+)`)
-
-func testNuclei(ctx context.Context, x *Executable, modeles string) ResultatTest {
-	out, errb, err := executer(ctx, x, time.Minute, "-version", "-duc")
-	tout := string(out) + string(errb)
-	if err != nil {
-		return ResultatTest{"nuclei", false, "version illisible : " + err.Error()}
-	}
-	v := "?"
-	if m := rxVersionNuclei.FindStringSubmatch(tout); m != nil {
-		v = m[1]
-	}
-	_, errb, err = executer(ctx, x, 2*time.Minute, ArgumentsValidationNuclei(modeles)...)
-	if err != nil {
-		return ResultatTest{"nuclei", false, fmt.Sprintf("validation des modèles en échec : %v %s", err, derniereLigne(string(errb)))}
-	}
-	return ResultatTest{"nuclei", true, fmt.Sprintf("moteur %s ; %d modèles de la liste blanche validés (signés, non intrusifs)", v, len(ModelesNuclei))}
-}
-
-// ArgumentsValidationNuclei : validation hors ligne des modèles (aucune cible, aucune requête).
-func ArgumentsValidationNuclei(modeles string) []string {
-	return []string{"-duc", "-ni", "-dut", "-validate", "-t", modeles,
-		"-etags", strings.Join(EtiquettesExclues, ","), "-ept", strings.Join(TypesExclus, ","), "-nc"}
 }
 
 func derniereLigne(s string) string {
