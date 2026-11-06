@@ -1,9 +1,12 @@
 package scan
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/netip"
 	"os"
 	"regexp"
@@ -76,16 +79,56 @@ func ArgumentsNmap(p ParametresProfil, ports []int, scripts []string, timing, fi
 	if len(p.PortsDecouverte) > 0 {
 		args = append(args, "-PS"+joindre(p.PortsDecouverte))
 	}
-	args = append(args, "-p", joindre(ps), "-oX", "-", "-iL", fichierCibles)
+	// --stats-every : Nmap insère sa progression (<taskprogress>) dans la sortie XML, lue au fil de l'eau
+	// pour afficher l'avancement réel et le temps restant (valeur fixe, jamais fournie par le serveur).
+	args = append(args, "-p", joindre(ps), "--stats-every", "10s", "-oX", "-", "-iL", fichierCibles)
 	if p.Scripts && len(scripts) > 0 {
 		args = append(args, "--script", strings.Join(scripts, ","))
 	}
 	return args, nil
 }
 
+// Avancement de Nmap : étape en cours, pourcentage global estimé (0-100) et temps restant annoncé.
+type AvancementNmap struct {
+	Etape       string
+	Pourcentage float64
+	RestantSecs int
+}
+
+// Poids des étapes de Nmap dans l'avancement global (découverte, ports, versions, scripts).
+var etapesNmap = []struct {
+	motif      string
+	libelle    string
+	debut, fin float64
+}{
+	{"Ping Scan", "découverte des machines", 0, 20},
+	{"Connect Scan", "examen des ports", 20, 60},
+	{"Service scan", "identification des versions", 60, 85},
+	{"NSE", "scripts de contrôle (lecture seule)", 85, 100},
+}
+
+var rxProgression = regexp.MustCompile(`<taskprogress task="([^"]+)"[^>]*percent="([0-9.]+)"(?:[^>]*remaining="([0-9]+)")?`)
+
+// lireAvancement interprète une ligne de sortie de Nmap ; ok=false si ce n'est pas une progression.
+func lireAvancement(ligne string) (AvancementNmap, bool) {
+	m := rxProgression.FindStringSubmatch(ligne)
+	if m == nil {
+		return AvancementNmap{}, false
+	}
+	pct, _ := strconv.ParseFloat(m[2], 64)
+	restant, _ := strconv.Atoi(m[3])
+	for _, e := range etapesNmap {
+		if strings.Contains(m[1], e.motif) {
+			return AvancementNmap{Etape: e.libelle, Pourcentage: e.debut + (e.fin-e.debut)*pct/100, RestantSecs: restant}, true
+		}
+	}
+	return AvancementNmap{Etape: m[1], Pourcentage: -1, RestantSecs: restant}, true
+}
+
 // ExecuterNmap lance le Nmap VÉRIFIÉ sur les hôtes fournis et convertit sa sortie XML en observations.
+// `suivi` (facultatif) reçoit l'avancement au fil de l'exécution.
 func ExecuterNmap(ctx context.Context, x *outils.Executable, p ParametresProfil, hotes []netip.Addr, ports []int,
-	scripts []string, timing string, inclureFragiles bool) ([]Hote, map[string]any, error) {
+	scripts []string, timing string, inclureFragiles bool, suivi func(AvancementNmap)) ([]Hote, map[string]any, error) {
 	f, err := os.CreateTemp("", "cacyber-cibles-*.txt")
 	if err != nil {
 		return nil, nil, err
@@ -99,10 +142,31 @@ func ExecuterNmap(ctx context.Context, x *outils.Executable, p ParametresProfil,
 	if err != nil {
 		return nil, nil, err
 	}
-	out, err := x.Commande(ctx, args...).Output()
+	cmd := x.Commande(ctx, args...)
+	sortie, err := cmd.StdoutPipe()
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("exécution de Nmap : %w", err)
 	}
+	var tampon bytes.Buffer
+	lecteur := bufio.NewReader(io.TeeReader(io.LimitReader(sortie, 256<<20), &tampon))
+	for {
+		ligne, errL := lecteur.ReadString('\n')
+		if suivi != nil {
+			if a, ok := lireAvancement(ligne); ok {
+				suivi(a)
+			}
+		}
+		if errL != nil {
+			break
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		return nil, nil, fmt.Errorf("exécution de Nmap : %w", err)
+	}
+	out := tampon.Bytes()
 	res, meta, err := AnalyserXMLNmap(out)
 	if err != nil {
 		return nil, nil, err

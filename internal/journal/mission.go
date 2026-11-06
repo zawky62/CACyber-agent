@@ -281,7 +281,18 @@ func (m *Mission) collecteReelle(ctx context.Context, pol scan.Politique) (*scan
 		version := scan.VersionNmap(ctx, x)
 		m.log(2, "info", fmt.Sprintf("Nmap %s (signé « %s », empreinte %s…) : connexions TCP sans droits administrateur, détection des versions, scripts « safe » : %s.",
 			version, x.Signataire, x.SHA256[:12], valeurOu(strings.Join(scripts, ", "), "aucun")), 15)
-		hotes, meta, err := scan.ExecuterNmap(ctx, x, profil, cibles.Hotes, pol.Ports, scripts, pol.Timing, pol.InclureFragiles)
+		derniereEtape := ""
+		hotes, meta, err := scan.ExecuterNmap(ctx, x, profil, cibles.Hotes, pol.Ports, scripts, pol.Timing, pol.InclureFragiles,
+			func(a scan.AvancementNmap) {
+				// Barre : 15 % -> 60 % pendant Nmap ; une ligne de journal à chaque nouvelle étape seulement.
+				if a.Pourcentage >= 0 {
+					m.progresser(15 + int(a.Pourcentage*45/100))
+				}
+				if a.Etape != derniereEtape {
+					derniereEtape = a.Etape
+					m.log(2, "info", "Nmap : "+a.Etape+dureeRestante(a.RestantSecs)+".", -1)
+				}
+			})
 		if err != nil {
 			m.log(2, "erreur", err.Error()+" — repli sur le scanner natif.", -1)
 		} else {
@@ -426,4 +437,16 @@ func (m *Mission) collecteDemo(ctx context.Context) (*scan.Observations, error) 
 func (i Instantane) JSON() string {
 	b, _ := json.MarshalIndent(i, "", "  ")
 	return string(b)
+}
+
+// dureeRestante : « (environ 4 min restantes) » d'après l'estimation de Nmap.
+func dureeRestante(secs int) string {
+	switch {
+	case secs <= 0:
+		return ""
+	case secs < 90:
+		return fmt.Sprintf(" (environ %d s restantes)", secs)
+	default:
+		return fmt.Sprintf(" (environ %d min restantes)", (secs+30)/60)
+	}
 }
