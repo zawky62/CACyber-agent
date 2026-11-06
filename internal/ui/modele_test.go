@@ -139,7 +139,7 @@ func TestDivers(t *testing.T) {
 	if !NoteValide("A") || NoteValide("F") || NoteValide("") {
 		t.Error("NoteValide")
 	}
-	if NomAffiche("sharphound") != "SharpHound" {
+	if NomAffiche("nmap") != "Nmap" || NomAffiche("auto-test") != "Auto-test (127.0.0.1)" {
 		t.Error("NomAffiche")
 	}
 }

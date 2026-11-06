@@ -25,13 +25,14 @@ var (
 	optIdentLinux    = flag.Bool("identifiants-linux", false, "saisir un compte SSH pour l'inventaire authentifié des serveurs Linux")
 	optWinRMHTTP     = flag.Bool("winrm-http", false, "autoriser WinRM sur HTTP (5985, NTLM) si HTTPS (5986) est indisponible")
 	optWinRMNonVerif = flag.Bool("winrm-certificat-non-verifie", false, "accepter un certificat WinRM autosigné (déconseillé)")
-	optSSHConnus     = flag.String("ssh-known-hosts", "", "fichier known_hosts de l'entité : toute clé SSH inconnue est alors refusée")
+	optSSHConnus     = flag.String("ssh-known-hosts", "", "fichier known_hosts de l'entité (OBLIGATOIRE pour l'inventaire SSH) : toute clé inconnue est refusée")
+	optSSHNonVerif   = flag.Bool("ssh-cles-non-verifiees", false, "accepter des clés d'hôte SSH non vérifiées (déconseillé : risque d'interception du mot de passe)")
 )
 
 // complementsDepuisOptions saisit les identifiants demandés et prépare les collectes complémentaires.
 func complementsDepuisOptions() (journal.Complements, error) {
 	c := journal.Complements{DomaineAD: *optDomaineAD, Auth: authinv.Options{
-		WinRMHTTP: *optWinRMHTTP, WinRMCertificatNonVerifie: *optWinRMNonVerif, SSHHotesConnus: *optSSHConnus}}
+		WinRMHTTP: *optWinRMHTTP, WinRMCertificatNonVerifie: *optWinRMNonVerif, SSHHotesConnus: *optSSHConnus, SSHClesNonVerifiees: *optSSHNonVerif}}
 	var err error
 	if *optIdentAD {
 		if c.IdentifiantsAD, err = saisir("Compte de domaine pour la lecture de l'annuaire"); err != nil {

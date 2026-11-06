@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -46,12 +47,12 @@ func inventaireSSH(ctx context.Context, ip string, o Options) (resultat, error) 
 			return resultat{}, err
 		}
 	}
+	// Vérification de la clé d'hôte AVANT tout envoi du mot de passe : fermée par défaut. Sans fichier
+	// known_hosts de l'entité, l'inventaire SSH est refusé, sauf acceptation explicite et journalisée.
 	var empreinte string
-	verif := func(_ string, _ net.Addr, cle ssh.PublicKey) error {
-		empreinte = ssh.FingerprintSHA256(cle) // relevée et transmise (traçabilité de l'hôte interrogé)
-		return nil
-	}
-	if o.SSHHotesConnus != "" {
+	var verif ssh.HostKeyCallback
+	switch {
+	case o.SSHHotesConnus != "":
 		kh, err := knownhosts.New(o.SSHHotesConnus)
 		if err != nil {
 			return resultat{}, fmt.Errorf("fichier known_hosts illisible : %w", err)
@@ -60,6 +61,17 @@ func inventaireSSH(ctx context.Context, ip string, o Options) (resultat, error) 
 			empreinte = ssh.FingerprintSHA256(cle)
 			return kh(h, a, cle)
 		}
+	case o.SSHClesNonVerifiees:
+		verif = func(_ string, _ net.Addr, cle ssh.PublicKey) error {
+			empreinte = ssh.FingerprintSHA256(cle) // relevée et transmise (traçabilité de l'hôte interrogé)
+			return nil
+		}
+		if o.Journal != nil {
+			o.Journal(fmt.Sprintf("%s : clé d'hôte SSH acceptée SANS vérification (option explicite).", ip))
+		}
+	default:
+		return resultat{}, errors.New("inventaire SSH refusé : fournissez le fichier known_hosts de l'entité " +
+			"(--ssh-known-hosts) pour authentifier les serveurs avant d'y envoyer un mot de passe")
 	}
 	var client *ssh.Client
 	err := o.Linux.Avec(func(mdp string) error {

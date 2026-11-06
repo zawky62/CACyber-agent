@@ -32,8 +32,12 @@ type Options struct {
 	// WinRMCertificatNonVerifie : accepte un certificat WinRM non vérifiable (autosigné). Désactivé par
 	// défaut : un intermédiaire pourrait relayer l'authentification.
 	WinRMCertificatNonVerifie bool
-	// SSHHotesConnus : fichier known_hosts de l'entité ; s'il est fourni, toute clé inconnue est refusée.
+	// SSHHotesConnus : fichier known_hosts de l'entité ; toute clé d'hôte inconnue ou différente est refusée.
+	// OBLIGATOIRE pour l'inventaire SSH, sauf acceptation explicite ci-dessous.
 	SSHHotesConnus string
+	// SSHClesNonVerifiees : accepte une clé d'hôte SSH non vérifiée (relevée et journalisée). Désactivé par
+	// défaut : sans vérification, un intermédiaire usurpant l'hôte capterait le mot de passe saisi.
+	SSHClesNonVerifiees bool
 	Delai          time.Duration // par hôte (défaut 90 s)
 	Journal        func(string)
 }
