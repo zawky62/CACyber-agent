@@ -76,6 +76,17 @@ func Ouvrir(racine string) (*Dossier, error) {
 	return &Dossier{Racine: racine}, nil
 }
 
+// Securiser crée le dossier `d` si nécessaire et lui applique la même protection que le dossier de
+// l'agent : ACL protégée (héritée par tout son contenu), propriétaire contrôlé, liens refusés.
+// Utilisé pour le dossier de l'outillage (%LOCALAPPDATA%\CACyber\outils).
+func Securiser(d string) error {
+	_, errStat := os.Stat(d)
+	if err := os.MkdirAll(d, 0o700); err != nil {
+		return fmt.Errorf("dossier %s : %w", d, err)
+	}
+	return securiserDossier(d, errStat == nil)
+}
+
 // LireCle renvoie la clé privée PEM, déchiffrée en mémoire (DPAPI sous Windows).
 func (d *Dossier) LireCle() ([]byte, error) {
 	brut, err := os.ReadFile(d.CheminCle())
