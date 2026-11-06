@@ -220,7 +220,16 @@ type Client struct {
 // NouveauClient charge l'identité et prépare la connexion mTLS (TLS 1.2 minimum, CA du serveur
 // seule autorité acceptée, certificat client présenté).
 func NouveauClient(e *etat.Etat, d *etat.Dossier) (*Client, error) {
-	paire, err := tls.LoadX509KeyPair(d.CheminCertificat(), d.CheminCle())
+	// La clé est déchiffrée en mémoire (DPAPI sous Windows) : elle n'existe jamais en clair sur disque.
+	certPEM, err := os.ReadFile(d.CheminCertificat())
+	if err != nil {
+		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
+	}
+	clePEM, err := d.LireCle()
+	if err != nil {
+		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
+	}
+	paire, err := tls.X509KeyPair(certPEM, clePEM)
 	if err != nil {
 		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
 	}

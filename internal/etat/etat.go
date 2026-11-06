@@ -5,9 +5,9 @@
 // l'agent, propre à ce poste et révocable côté serveur. Aucune clé d'API, aucun mot de passe,
 // aucune règle d'analyse n'est stockée.
 //
-// TODO(durcissement Windows) : protéger cle.pem par DPAPI (CryptProtectData, portée machine) et
-// restreindre l'ACL du dossier aux comptes SYSTEM et Administrateurs. En attendant, le fichier est
-// créé avec des permissions restreintes (effectives sous Unix ; sous Windows l'ACL héritée s'applique).
+// Durcissement (voir protection_windows.go) : sous Windows, dossier à ACL protégée (SYSTEM,
+// Administrateurs, compte de l'agent ; héritage coupé ; dossier pré-créé par un tiers refusé) et clé
+// chiffrée par DPAPI portée machine. Ailleurs : permissions POSIX 0700 / 0600.
 package etat
 
 import (
@@ -41,7 +41,7 @@ func DossierParDefaut() string {
 		if pd := os.Getenv("ProgramData"); pd != "" {
 			d := filepath.Join(pd, "CACyber", "Agent")
 			if os.MkdirAll(d, 0o700) == nil && inscriptible(d) {
-				return d
+				return d // l'ACL est appliquée et vérifiée par Ouvrir
 			}
 		}
 	}
@@ -62,11 +62,26 @@ func inscriptible(d string) bool {
 }
 
 // Ouvrir crée le dossier (et son sous-dossier de journaux) si nécessaire.
+// Le dossier racine reçoit une ACL protégée ; un dossier pré-existant au propriétaire non fiable est refusé.
 func Ouvrir(racine string) (*Dossier, error) {
+	_, errStat := os.Stat(racine)
+	existait := errStat == nil
 	if err := os.MkdirAll(filepath.Join(racine, "journaux"), 0o700); err != nil {
 		return nil, fmt.Errorf("dossier de l'agent %s : %w", racine, err)
 	}
+	if err := securiserDossier(racine, existait); err != nil {
+		return nil, err
+	}
 	return &Dossier{Racine: racine}, nil
+}
+
+// LireCle renvoie la clé privée PEM, déchiffrée en mémoire (DPAPI sous Windows).
+func (d *Dossier) LireCle() ([]byte, error) {
+	brut, err := os.ReadFile(d.CheminCle())
+	if err != nil {
+		return nil, err
+	}
+	return deproteger(brut)
 }
 
 func (d *Dossier) chemin(nom string) string { return filepath.Join(d.Racine, nom) }
@@ -101,11 +116,15 @@ func (d *Dossier) Charger() (*Etat, error) {
 
 // Enregistrer écrit l'identité et l'état de manière atomique (fichier temporaire + renommage).
 func (d *Dossier) Enregistrer(e *Etat, clePEM, certPEM, caPEM []byte) error {
+	cleProtegee, err := proteger(clePEM) // DPAPI portée machine sous Windows
+	if err != nil {
+		return err
+	}
 	for _, f := range []struct {
 		chemin string
 		data   []byte
 		mode   os.FileMode
-	}{{d.CheminCle(), clePEM, 0o600}, {d.CheminCertificat(), certPEM, 0o644}, {d.CheminCA(), caPEM, 0o644}} {
+	}{{d.CheminCle(), cleProtegee, 0o600}, {d.CheminCertificat(), certPEM, 0o644}, {d.CheminCA(), caPEM, 0o644}} {
 		if err := ecrireAtomique(f.chemin, f.data, f.mode); err != nil {
 			return err
 		}
@@ -124,10 +143,25 @@ func (d *Dossier) Oublier() error {
 	return nil
 }
 
+// ecrireAtomique : fichier temporaire au nom aléatoire créé exclusivement (os.CreateTemp, O_EXCL)
+// dans le même dossier protégé, puis renommage atomique.
 func ecrireAtomique(chemin string, data []byte, mode os.FileMode) error {
-	tmp := chemin + ".tmp"
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(chemin), "."+filepath.Base(chemin)+".*.tmp")
+	if err != nil {
 		return err
+	}
+	tmp := f.Name()
+	_, errW := f.Write(data)
+	errC := f.Close()
+	if errW == nil {
+		errW = errC
+	}
+	if errW == nil {
+		errW = os.Chmod(tmp, mode)
+	}
+	if errW != nil {
+		_ = os.Remove(tmp)
+		return errW
 	}
 	return os.Rename(tmp, chemin)
 }
