@@ -5,6 +5,8 @@ package outils
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -81,4 +83,10 @@ func ouvrirAdresse(url string) error {
 // propre manifeste qui demande l'élévation (fenêtre UAC) ; l'utilisateur peut refuser à tout moment.
 func lancerInstallateur(chemin string) error {
 	return ouvrirAdresse(chemin)
+}
+
+// sansFenetre : les outils (programmes console) sont lancés sans ouvrir de fenêtre de console,
+// l'agent étant un logiciel fenêtré ; leurs sorties sont lues par l'agent et consignées au journal.
+func sansFenetre(c *exec.Cmd) {
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 }

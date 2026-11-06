@@ -174,3 +174,27 @@ func TestSignatureAbsente(t *testing.T) {
 		t.Fatal("PKCS#7 invalide accepté")
 	}
 }
+
+// Téléchargement réel et vérification de l'installateur officiel de Nmap (sans l'exécuter).
+// Lancé seulement si CACYBER_TEST_RESEAU=1 (accès Internet requis).
+func TestInstallateurNmapReseau(t *testing.T) {
+	if os.Getenv("CACYBER_TEST_RESEAU") != "1" || runtime.GOOS != "windows" {
+		t.Skip("test réseau désactivé (CACYBER_TEST_RESEAU=1 pour l'activer)")
+	}
+	g, err := Nouveau(t.TempDir(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chemin, err := g.PreparerInstallateurNmap(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, err := preparerChemin(NmapInstallateur, chemin, NmapInstallateur.SHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer x.Fermer()
+	if x.Signataire != "Nmap Software LLC" {
+		t.Fatalf("signataire inattendu : %q", x.Signataire)
+	}
+}

@@ -22,3 +22,5 @@ func ouvrirAdresse(url string) error { return exec.Command("xdg-open", url).Star
 func lancerInstallateur(string) error {
 	return errors.New("installateur Windows : non applicable sur ce système")
 }
+
+func sansFenetre(*exec.Cmd) {}

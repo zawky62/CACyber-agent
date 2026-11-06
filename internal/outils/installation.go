@@ -554,6 +554,7 @@ func (x *Executable) Commande(ctx context.Context, args ...string) *exec.Cmd {
 		c.Env = x.env
 	}
 	c.Dir = filepath.Dir(x.Chemin)
+	sansFenetre(c)
 	return c
 }
 
