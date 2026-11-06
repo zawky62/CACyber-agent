@@ -118,6 +118,10 @@ func securiserDossier(d string, existait bool) error {
 			return fmt.Errorf("dossier %s pré-existant avec un propriétaire non fiable (%s) : refusé", d, proprio)
 		}
 	}
+	// Refus des points d'analyse (jonctions, liens symboliques) : le dossier doit être un vrai dossier.
+	if fi, err := os.Lstat(d); err != nil || fi.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 || !fi.IsDir() {
+		return fmt.Errorf("dossier %s refusé : lien ou point d'analyse", d)
+	}
 	res := exec.Command(outilSysteme("icacls.exe"), d, "/inheritance:r", "/grant:r",
 		"*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "*"+sid+":(OI)(CI)F")
 	if out, err := res.CombinedOutput(); err != nil {

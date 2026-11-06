@@ -11,6 +11,7 @@
 package etat
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -80,6 +81,15 @@ func (d *Dossier) LireCle() ([]byte, error) {
 	brut, err := os.ReadFile(d.CheminCle())
 	if err != nil {
 		return nil, err
+	}
+	// Migration : clé écrite en clair par une version antérieure (avant DPAPI) → chiffrée sur place.
+	if bytes.HasPrefix(bytes.TrimSpace(brut), []byte("-----BEGIN")) {
+		if protegee, err := proteger(brut); err == nil {
+			if err := ecrireAtomique(d.CheminCle(), protegee, 0o600); err != nil {
+				return nil, fmt.Errorf("migration de la clé : %w", err)
+			}
+		}
+		return brut, nil
 	}
 	return deproteger(brut)
 }

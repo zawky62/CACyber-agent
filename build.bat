@@ -14,9 +14,12 @@ set GOTOOLCHAIN=local
 echo [1/3] Tests...
 "%GO%" test ./...
 if errorlevel 1 goto erreur
-echo [2/3] Compilation de bin\CACCyber-Agent.exe (version %VERSION%)...
+echo [2/3] Ressources Windows (icone CACyber, version, manifeste) puis compilation (version %VERSION%)...
+"%GO%" run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon internal\ui\icone-app.png --manifest gui --product-name "CACyber Agent" --product-version %VERSION% --file-version %VERSION% --file-description "CACyber - Agent de scan en lecture seule" --copyright "CACyber" --original-filename CACCyber-Agent.exe --out rsrc
+if errorlevel 1 goto erreur
 if not exist bin mkdir bin
-"%GO%" build -trimpath -ldflags "-s -w -X main.version=%VERSION%" -o bin\CACCyber-Agent.exe .
+rem -H windowsgui : logiciel fenetre, aucune console noire au double-clic ; --cli se rattache au terminal.
+"%GO%" build -trimpath -ldflags "-s -w -H windowsgui -X main.version=%VERSION%" -o bin\CACCyber-Agent.exe .
 if errorlevel 1 goto erreur
 echo [3/3] Signature de code : voir README (signtool + certificat EV), etape a realiser sur le poste de signature.
 echo.

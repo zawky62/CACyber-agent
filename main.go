@@ -8,7 +8,8 @@
 // Jamais : exploitation, test d'intrusion, force brute, essai de mot de passe, modification.
 //
 // Modes :
-//   - par défaut : interface locale dans le navigateur (127.0.0.1, port aléatoire, jeton de session) ;
+//   - par défaut : fenêtre de logiciel native (WebView2) affichant l'interface servie en local
+//     (127.0.0.1, port aléatoire, jeton de session) ; aucune console, aucun onglet de navigateur ;
 //   - --cli      : déroulé complet en console (appairage, scan, transmission), sans interface ;
 //   - --demo     : réseau simulé (jeu « Usine de Brest »), appairage et transmission réels.
 package main
@@ -20,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,9 +35,14 @@ import (
 // version est renseignée à la compilation : -ldflags "-X main.version=1.0.0".
 var version = "dev"
 
+// La fenêtre native (WebView2) et sa boucle de messages doivent rester sur le fil principal.
+func init() { runtime.LockOSThread() }
+
 func main() {
+	rattacherConsole() // messages visibles si l'agent est lancé depuis un terminal
 	if err := executer(); err != nil {
 		fmt.Fprintln(os.Stderr, "Erreur :", err)
+		alerte("CACyber — Agent de scan", "Erreur : "+err.Error()) // double-clic : boîte de dialogue
 		os.Exit(1)
 	}
 }
@@ -103,14 +110,23 @@ func executer() error {
 	if *cli {
 		return modeConsole(ctx, a, racine)
 	}
-	return modeInterface(ctx, a)
+	return modeInterface(ctx, a, racine)
 }
 
-// modeInterface ouvre l'interface locale dans le navigateur et attend Ctrl+C.
-func modeInterface(ctx context.Context, a *app.App) error {
+// modeInterface ouvre l'agent comme un logiciel : fenêtre native qui affiche l'interface locale.
+// Fermer la fenêtre arrête l'agent. Repli : navigateur (si aucune fenêtre native n'est possible).
+func modeInterface(ctx context.Context, a *app.App, racine string) error {
 	url, srv, err := ui.Demarrer(ctx, a)
 	if err != nil {
 		return err
+	}
+	defer func() {
+		fin, annuler := context.WithTimeout(context.Background(), 3*time.Second)
+		defer annuler()
+		_ = srv.Shutdown(fin)
+	}()
+	if ui.OuvrirFenetre(url, racine) {
+		return nil // la fenêtre a été fermée par l'utilisateur
 	}
 	fmt.Println("CACyber-Agent", version, "— interface locale :", url)
 	fmt.Println("Laissez cette fenêtre ouverte pendant le scan ; Ctrl+C pour quitter.")
@@ -118,9 +134,7 @@ func modeInterface(ctx context.Context, a *app.App) error {
 		fmt.Println("Ouvrez l'adresse ci-dessus dans votre navigateur.")
 	}
 	<-ctx.Done()
-	fin, annuler := context.WithTimeout(context.Background(), 3*time.Second)
-	defer annuler()
-	return srv.Shutdown(fin)
+	return nil
 }
 
 // modeConsole déroule appairage (déjà fait si --code), contrôle du mandat, scan et transmission.
