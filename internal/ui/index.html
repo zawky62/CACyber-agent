@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CACyber — Agent de scan</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<!--
+  Interface locale de CACyber-Agent : servie par l'agent sur 127.0.0.1 uniquement.
+  Reprend les écrans du prototype Tkinter (appairage → site relié → scan → transmission).
+  Le jeton de session figure dans l'URL et accompagne chaque appel (en-tête X-Jeton).
+-->
+<style>
+  :root {
+    --ink: #16222F; --ink-3: #2B3E52; --paper: #F6F7F5; --card: #FFFFFF; --line: #E3E6E0;
+    --text: #232B33; --muted: #5C6873; --green: #0E7C5B; --amber: #9A5B12; --red: #A6342C; --blue: #1C4E80; --track: #ECEFEA;
+    --note-a: #0E7C5B; --note-b: #5C8A3C; --note-c: #B98A1C; --note-d: #B5622A; --note-e: #A6342C;
+    --font: Inter, "Segoe UI", system-ui, sans-serif; --mono: Consolas, "Cascadia Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--text); font: 14px/1.5 var(--font); }
+  header { background: var(--ink); color: #fff; padding: 16px 22px 14px; display: flex; align-items: center; gap: 14px; position: relative; }
+  header img { height: 34px; }
+  header .sous { color: #B9C4CF; font-size: 13px; margin-top: 6px; }
+  .badge-ls { position: absolute; top: 0; right: 16px; background: var(--green); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 2px 10px 3px; border-radius: 0 0 6px 6px; }
+  .badge-demo { background: var(--amber); right: 140px; }
+  main { max-width: 620px; margin: 0 auto; padding: 18px 18px 28px; }
+  .carte { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  h1 { font-size: 18px; color: var(--ink); margin: 0 0 4px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  label { display: block; font-weight: 600; color: var(--ink); font-size: 13px; margin: 16px 0 4px; }
+  input { width: 100%; font: 19px var(--mono); text-align: center; padding: 10px; border: 1px solid #C9CFC6; border-radius: 8px; letter-spacing: .04em; }
+  input:focus, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; }
+  .primaire { width: 100%; background: var(--ink); color: #fff; font-weight: 700; font-size: 15px; padding: 11px; margin-top: 12px; }
+  .primaire:hover { background: var(--ink-3); }
+  .primaire:disabled { opacity: .55; cursor: not-allowed; }
+  .secondaire { background: var(--card); color: var(--ink); border: 1px solid var(--line); font-weight: 700; padding: 8px 16px; }
+  .vert { background: var(--green); color: #fff; border-color: var(--green); }
+  .lien { background: none; color: var(--blue); text-decoration: underline; font-size: 13px; padding: 0; }
+  .erreur { color: var(--red); font-weight: 600; font-size: 13px; min-height: 18px; margin-top: 6px; }
+  .relie-haut { display: flex; justify-content: space-between; font-size: 13px; }
+  .connecte { color: var(--green); font-weight: 700; }
+  .site { font-weight: 700; color: var(--ink); font-size: 15px; margin-top: 2px; }
+  .tuiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .tuile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+  .tuile b { display: block; font-size: 22px; color: var(--ink); }
+  .tuile span { font-size: 12px; color: var(--muted); }
+  .note { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; color: #fff; font: 700 21px Georgia, serif; background: #fff; border: 2px dashed #C9CFC6; color: #9AA3AB; }
+  .note.n-A { background: var(--note-a); } .note.n-B { background: var(--note-b); } .note.n-C { background: var(--note-c); } .note.n-D { background: var(--note-d); } .note.n-E { background: var(--note-e); }
+  .note[class*="n-"] { border: 0; color: #fff; }
+  .etape { display: flex; justify-content: space-between; font-weight: 700; color: var(--ink); font-size: 13px; }
+  .barre { height: 8px; background: var(--track); border-radius: 8px; overflow: hidden; margin: 6px 0 12px; }
+  .barre span { display: block; height: 100%; background: var(--blue); transition: width .3s; }
+  .barre.fini span { background: var(--green); }
+  .journal { background: #FBFBFA; border: 1px solid var(--line); border-radius: 8px; height: 230px; overflow-y: auto; padding: 8px 12px; font: 12.5px/1.6 var(--mono); }
+  .journal .h { color: #8A949D; margin-right: 8px; }
+  .k-ok { color: var(--green); } .k-erreur { color: var(--red); font-weight: 700; } .k-constat { color: var(--amber); } .k-critique { color: var(--red); font-weight: 700; }
+  .bas { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  .message { color: var(--green); font-weight: 600; font-size: 13px; margin-top: 8px; }
+  .pied { text-align: center; margin-top: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo.svg" alt="CACyber">
+  <span class="sous">Agent de scan</span>
+  <span class="badge-ls" title="Aucune exploitation, aucune intrusion, aucune modification">LECTURE SEULE</span>
+  <span class="badge-ls badge-demo" id="badge-demo" hidden>DÉMONSTRATION</span>
+</header>
+<main>
+  <!-- Écran 1 : appairage -->
+  <section id="ecran-appairage" hidden>
+    <div class="carte" style="margin-top:22px">
+      <h1>Relier ce poste à un dossier</h1>
+      <p class="muted">Saisissez le code d'appairage transmis par votre commissaire aux comptes. L'agent examine ensuite le réseau
+        interne du site, sans rien modifier, et transmet ses relevés au cabinet. Un journal lisible est conservé sur ce poste.</p>
+      <label for="code">Code d'appairage</label>
+      <input id="code" value="CACC-" autocomplete="off" spellcheck="false">
+      <div class="erreur" id="err-code" role="alert"></div>
+      <button class="primaire" id="btn-relier">Relier ce site</button>
+    </div>
+    <p class="muted pied">Format attendu : CACC-XXXX-XXXX-XXXX-XXXX</p>
+  </section>
+
+  <!-- Écran 2 : site relié, scan, transmission -->
+  <section id="ecran-scan" hidden>
+    <div class="carte">
+      <div class="relie-haut"><span class="muted">Site relié</span><span class="connecte">● Connecté au cabinet</span></div>
+      <div class="site" id="site"></div>
+      <div class="muted" id="detail"></div>
+    </div>
+    <button class="primaire" id="btn-scan">▶ Lancer le scan interne</button>
+    <div class="tuiles">
+      <div class="tuile"><b id="t-machines">0</b><span>Machines</span></div>
+      <div class="tuile"><b id="t-ports">0</b><span>Ports ouverts</span></div>
+      <div class="tuile"><b id="t-constats">—</b><span>Constats</span></div>
+      <div class="tuile"><b><span class="note" id="t-note">?</span></b><span>Note cyber</span></div>
+    </div>
+    <div class="etape"><span id="etape">Prêt à lancer le scan.</span><span class="muted" id="pct">0 %</span></div>
+    <div class="barre" id="barre"><span style="width:0%"></span></div>
+    <div class="journal" id="journal" aria-live="polite"></div>
+    <div class="bas">
+      <button class="secondaire" id="btn-transmettre" disabled>Transmettre au dossier</button>
+      <button class="lien" id="btn-oublier">Changer de code</button>
+    </div>
+    <div class="erreur" id="err-scan" role="alert"></div>
+    <div class="message" id="message"></div>
+  </section>
+</main>
+<script>
+"use strict";
+// Jeton de session lu dans l'URL, puis retiré de la barre d'adresse.
+const JETON = new URLSearchParams(location.search).get("jeton") || "";
+history.replaceState(null, "", "/");
+const $ = id => document.getElementById(id);
+
+async function appel(chemin, corps) {
+  const opts = { method: corps === undefined ? "GET" : "POST", headers: { "X-Jeton": JETON } };
+  if (corps !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(corps); }
+  const r = await fetch(chemin, opts);
+  const d = await r.json().catch(() => ({ erreur: "Réponse illisible de l'agent." }));
+  if (!r.ok) throw new Error(d.erreur || "Erreur");
+  return d;
+}
+
+let nbLignes = 0;
+function afficher(c) {
+  $("badge-demo").hidden = !c.demo;
+  $("ecran-appairage").hidden = c.relie;
+  $("ecran-scan").hidden = !c.relie;
+  if (!c.relie) { nbLignes = 0; $("journal").textContent = ""; return; }
+  $("site").textContent = `${c.site} — ${c.client}`;
+  $("detail").textContent = `${c.cabinet} · SIRET ${c.siret}${c.expire_le ? " · autorisation valable jusqu'au " + new Date(c.expire_le).toLocaleDateString("fr-FR") : ""}`;
+  const m = c.mission || {};
+  const enCours = m.statut === "scan";
+  $("btn-scan").disabled = enCours;
+  $("btn-scan").textContent = enCours ? "Scan interne en cours…" : (m.statut && m.statut !== "pret" ? "▶ Relancer le scan interne" : "▶ Lancer le scan interne");
+  $("t-machines").textContent = m.machines || 0;
+  $("t-ports").textContent = m.ports || 0;
+  $("t-constats").textContent = m.constats == null ? "—" : m.constats;
+  const note = $("t-note");
+  note.textContent = m.note || "?";
+  note.className = "note" + (m.note ? " n-" + m.note : "");
+  $("etape").textContent = m.etape || "";
+  $("pct").textContent = (m.progression || 0) + " %";
+  $("barre").firstElementChild.style.width = (m.progression || 0) + "%";
+  $("barre").classList.toggle("fini", m.statut === "transmis");
+  const bt = $("btn-transmettre");
+  bt.disabled = m.statut !== "collecte";
+  bt.classList.toggle("vert", m.statut === "collecte");
+  bt.textContent = m.statut === "transmis" ? "Transmis ✓" : "Transmettre au dossier";
+  $("message").textContent = m.statut === "transmis" ? (m.message || "") + " Le site apparaît en « Scan terminé » dans la console du cabinet." : "";
+  $("err-scan").textContent = m.statut === "erreur" ? m.message : "";
+  const j = m.journal || [];
+  if (j.length < nbLignes) { $("journal").textContent = ""; nbLignes = 0; }
+  for (const l of j.slice(nbLignes)) {
+    const div = document.createElement("div");
+    div.className = "k-" + l.type;
+    const h = document.createElement("span"); h.className = "h"; h.textContent = l.heure;
+    div.append(h, document.createTextNode(l.texte));
+    $("journal").appendChild(div);
+  }
+  if (j.length !== nbLignes) $("journal").scrollTop = $("journal").scrollHeight;
+  nbLignes = j.length;
+}
+
+async function rafraichir() { try { afficher(await appel("/api/etat")); } catch (e) { /* agent arrêté */ } }
+
+$("btn-relier").onclick = async () => {
+  $("err-code").textContent = ""; $("btn-relier").disabled = true; $("btn-relier").textContent = "Appairage en cours…";
+  try { afficher(await appel("/api/relier", { code: $("code").value })); }
+  catch (e) { $("err-code").textContent = e.message; }
+  finally { $("btn-relier").disabled = false; $("btn-relier").textContent = "Relier ce site"; }
+};
+$("code").addEventListener("keydown", e => { if (e.key === "Enter") $("btn-relier").click(); });
+$("btn-scan").onclick = async () => { $("err-scan").textContent = ""; try { afficher(await appel("/api/lancer", {})); } catch (e) { $("err-scan").textContent = e.message; } };
+$("btn-transmettre").onclick = async () => {
+  $("btn-transmettre").disabled = true;
+  try { afficher(await appel("/api/transmettre", {})); } catch (e) { $("err-scan").textContent = e.message; }
+};
+$("btn-oublier").onclick = async () => {
+  if (!confirm("Oublier l'appairage de ce poste ? Un nouveau code sera nécessaire.")) return;
+  try { afficher(await appel("/api/oublier", {})); } catch (e) { $("err-scan").textContent = e.message; }
+};
+rafraichir();
+setInterval(rafraichir, 700);
+</script>
+</body>
+</html>
