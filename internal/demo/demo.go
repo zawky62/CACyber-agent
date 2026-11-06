@@ -1,5 +1,5 @@
 // Package demo fournit le jeu d'observations du mode --demo (« Usine de Brest », entreprise
-// fictive). Seul le RÉSEAU est simulé : l'appairage, le mTLS, les requêtes signées, le journal
+// fictive). Seul le RÉSEAU est simulé : l'appairage, les requêtes signées, le journal
 // et l'envoi au serveur sont réels. Le jeu ne contient que des observations brutes, jamais
 // de constat : l'analyse reste faite par le serveur, exactement comme pour un scan réel.
 package demo

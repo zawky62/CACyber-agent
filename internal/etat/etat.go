@@ -24,7 +24,7 @@ import (
 type Etat struct {
 	AgentID  string `json:"agent_id"`
 	Serveur  string `json:"serveur"`  // application principale (appairage)
-	URLMTLS  string `json:"url_mtls"` // écoute mTLS des agents
+	URLMTLS  string `json:"url_mtls"` // obsolète (ancien TLS mutuel), conservé pour relire les anciens états
 	Site     string `json:"site"`
 	SIRET    string `json:"siret"`
 	Client   string `json:"client"`

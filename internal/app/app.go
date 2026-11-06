@@ -113,7 +113,7 @@ func (a *App) Relier(code string) error {
 	return a.activer(e)
 }
 
-// Verifier interroge le serveur (mTLS) pour confirmer que le mandat couvre toujours le site.
+// Verifier interroge le serveur (requête signée) pour confirmer que le mandat couvre toujours le site.
 func (a *App) Verifier() (*api.Moi, error) {
 	a.mu.Lock()
 	c := a.client

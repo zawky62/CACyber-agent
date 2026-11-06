@@ -2,7 +2,7 @@
 //
 // Rôle : relier le poste à un site (code d'appairage émis par le cabinet, mandat signé exigé par
 // le serveur), collecter des observations brutes (réseau, inventaire) puis les transmettre au
-// cabinet sur un canal mTLS, chaque requête étant signée. Aucune règle d'analyse, aucun score et
+// cabinet en HTTPS, chaque requête étant signée par la clé du poste. Aucune règle d'analyse, aucun score et
 // aucune donnée de vulnérabilité ne figurent dans ce programme : c'est le serveur qui analyse.
 //
 // Jamais : exploitation, test d'intrusion, force brute, essai de mot de passe, modification.
@@ -205,7 +205,7 @@ func modeConsole(ctx context.Context, a *app.App, racine string) error {
 	fmt.Printf("Site relié : %s — %s (SIRET %s) · %s\n", c.Site, c.Client, c.SIRET, c.Cabinet)
 	moi, err := a.Verifier()
 	if err != nil {
-		return fmt.Errorf("contrôle auprès du serveur (mTLS) : %w", err)
+		return fmt.Errorf("contrôle auprès du serveur : %w", err)
 	}
 	if !moi.MandatValide {
 		return errors.New("aucun mandat signé et valide ne couvre ce site : scan impossible")

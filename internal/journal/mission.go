@@ -215,7 +215,7 @@ func (m *Mission) Transmettre() (*api.Bilan, error) {
 	m.occupe = true
 	obs, id := m.obs, m.scanID
 	m.mu.Unlock()
-	m.log(7, "info", "Transmission des observations au cabinet (canal mTLS, requête signée)…", 95)
+	m.log(7, "info", "Transmission des observations au cabinet (HTTPS, chaque requête signée)…", 95)
 	bilan, corps, err := m.client.EnvoyerResultats(id, obs)
 	if err != nil {
 		return nil, m.echouer(fmt.Errorf("transmission refusée : %w", err))
