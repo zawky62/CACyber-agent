@@ -30,7 +30,7 @@ agent/
     ├── journal/    orchestration du scan, étapes, journal lisible, bilan de l'outillage
     ├── outils/     outillage open source : manifeste épinglé, installation, vérification, auto-test
     ├── scan/       cibles, Nmap (liste blanche, profils), scanner natif, inventaire Windows, schéma
-    └── ui/         interface locale embarquée (127.0.0.1)
+    └── ui/         interface graphique NATIVE (Fyne) : 6 écrans, thème CACyber, ressources embarquées
 ```
 
 ## Déroulé
@@ -81,7 +81,7 @@ liste blanche compilée (un serveur compromis ne rend pas l'agent offensif).
 ## Utilisation
 
 ```
-CACCyber-Agent.exe                                  interface locale dans le navigateur
+CACCyber-Agent.exe                                  fenêtre native de l'agent
 CACCyber-Agent.exe --cli --code CACC-…-…-…-…        déroulé complet en console
 CACCyber-Agent.exe --demo                           réseau simulé, appairage et envoi réels
 ```
@@ -102,8 +102,40 @@ CACCyber-Agent.exe --demo                           réseau simulé, appairage e
 | `--reinitialiser` | oublie l'appairage |
 | `--version` | version |
 
-L'interface locale écoute sur `127.0.0.1` (port aléatoire) et exige un jeton de session aléatoire ;
-l'en-tête Host est contrôlé et les actions n'acceptent que du JSON.
+### Interface graphique native
+
+L'agent s'ouvre comme un logiciel de bureau : **fenêtre native Fyne** (rendu OpenGL par le système),
+**sans navigateur, sans vue web, sans serveur HTTP local**, un seul exécutable (logo, icône et thème
+embarqués). Six écrans, tous reprenables (l'agent rouvre l'étape utile au redémarrage) :
+
+1. **Accueil** : cadre de l'audit (autorisé par mandat, lecture seule, jamais d'exploitation, tout journalisé) ;
+2. **Appairage** : saisie du code, contrôle par le serveur, site / entité / cabinet, validité du mandat
+   (explication claire s'il n'y a pas de mandat valide) ;
+3. **Outillage** : composants (Nmap, osquery, Nuclei, SharpHound…) avec version, licence, signature et
+   barre de progression par composant ; installation officielle de Nmap sur demande ; option Npcap
+   expliquée (validation administrateur UAC uniquement si l'utilisateur la choisit) ; auto-test sur
+   127.0.0.1 et « Moteur de scan prêt » ;
+4. **Scan** : profil (Découverte, Standard, Approfondi, Industriel ; proposition du cabinet présélectionnée),
+   mode démonstration, progression et journal en direct, transmission au cabinet ;
+5. **Résultat** : note A→E aux couleurs de la console, score, nombre de constats, accès au journal local ;
+6. **Paramètres** : versions, licences des composants, dossiers, **désinstallation** (purge des données
+   locales, journaux du client conservés sauf choix contraire).
+
+L'en-tête indique en permanence l'état de la liaison : *en ligne · mandat valide*, *mandat non valide*
+ou *hors ligne* (le mandat est revérifié toutes les 30 secondes). Les erreurs sont présentées en
+français, avec la marche à suivre.
+
+### Compilation
+
+L'interface native exige **CGO** et un compilateur C **MinGW-w64** (GLFW/OpenGL est compilé en C) :
+
+```
+winget install BrechtSanders.WinLibs.POSIX.UCRT     (compilateur gcc, libre)
+build.bat                                           (détecte WinLibs ; variable MINGW sinon)
+```
+
+Le premier build compile GLFW (quelques minutes) ; les suivants sont incrémentaux. Le mode console
+(`--cli`) est inchangé et partage le même exécutable.
 
 ### Dossier de l'agent
 
