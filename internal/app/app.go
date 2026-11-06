@@ -42,6 +42,7 @@ type App struct {
 	etat    *etat.Etat
 	client  *api.Client
 	mission *journal.Mission
+	outil   outillage
 }
 
 // Nouvelle ouvre le dossier de l'agent et recharge un éventuel appairage existant.
@@ -80,13 +81,15 @@ type Contexte struct {
 	Demo    bool                `json:"demo"`
 	Version string              `json:"version"`
 	Mission *journal.Instantane `json:"mission,omitempty"`
+	// Outillage : mise en place des outils open source (Nmap, osquery, Nuclei) et auto-test.
+	Outillage EtatOutillage `json:"outillage"`
 }
 
 // Contexte renvoie l'état affichable.
 func (a *App) Contexte() Contexte {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	c := Contexte{Demo: a.opt.Demo, Version: a.opt.Version}
+	c := Contexte{Demo: a.opt.Demo, Version: a.opt.Version, Outillage: a.Outillage()}
 	if a.etat != nil {
 		c.Relie, c.Site, c.SIRET, c.Client, c.Cabinet, c.Expire = true, a.etat.Site, a.etat.SIRET, a.etat.Client, a.etat.Cabinet, a.etat.ExpireLe
 		i := a.mission.Etat()

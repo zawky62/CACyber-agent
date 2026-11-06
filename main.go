@@ -29,6 +29,7 @@ import (
 	"cacyber/agent/internal/app"
 	"cacyber/agent/internal/etat"
 	"cacyber/agent/internal/journal"
+	"cacyber/agent/internal/outils"
 	"cacyber/agent/internal/ui"
 )
 
@@ -59,6 +60,10 @@ func executer() error {
 		dev          = flag.Bool("dev", false, "laboratoire : autorise le HTTP non chiffré hors de ce poste")
 		afficherVers = flag.Bool("version", false, "affiche la version et quitte")
 		reinit       = flag.Bool("reinitialiser", false, "oublie l'appairage de ce poste et quitte")
+		instOutils   = flag.Bool("installer-outils", false, "installe et vérifie l'outillage open source (osquery, Nuclei, modèles), exécute l'auto-test et quitte")
+		etatOutils   = flag.Bool("etat-outils", false, "contrôle l'outillage installé (empreintes, signatures) sans rien télécharger et quitte")
+		instNmap     = flag.Bool("installer-nmap", false, "télécharge l'installateur OFFICIEL de Nmap, le vérifie et l'ouvre en mode interactif (UAC) puis quitte")
+		npcap        = flag.Bool("npcap", false, "ouvre la page officielle de Npcap (option des scans avancés SYN/OS) puis quitte")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "CACyber-Agent %s — agent de scan en lecture seule\n\nOptions :\n", version)
@@ -102,6 +107,10 @@ func executer() error {
 	ctx, arreter := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer arreter()
 
+	if *instOutils || *etatOutils || *instNmap || *npcap {
+		return commandesOutillage(ctx, a, *instOutils, *etatOutils, *instNmap, *npcap)
+	}
+
 	if *code != "" && !a.Relie() {
 		if err := a.Relier(*code); err != nil {
 			return fmt.Errorf("appairage : %w", err)
@@ -134,6 +143,56 @@ func modeInterface(ctx context.Context, a *app.App, racine string) error {
 		fmt.Println("Ouvrez l'adresse ci-dessus dans votre navigateur.")
 	}
 	<-ctx.Done()
+	return nil
+}
+
+// commandesOutillage : mise en place et contrôle de l'outillage open source (brief §12.2).
+func commandesOutillage(ctx context.Context, a *app.App, installer, controler, nmap, npcap bool) error {
+	if nmap {
+		fmt.Println("Nmap (licence NPSL, libre et gratuit) : téléchargement de l'installateur officiel depuis nmap.org…")
+		if err := a.InstallerNmap(ctx); err != nil {
+			return err
+		}
+		fmt.Println("Installateur vérifié (SHA-256 + signature « Nmap Software LLC ») et ouvert. Acceptez la fenêtre Windows")
+		fmt.Println("si vous souhaitez installer Nmap ; Npcap est facultatif (scans avancés). Refuser n'empêche pas l'audit.")
+	}
+	if npcap {
+		fmt.Println("Npcap n'est utile qu'aux scans avancés (SYN, empreinte d'OS). Ouverture de la page officielle :", "https://npcap.com/#download")
+		if err := a.OuvrirNpcap(); err != nil {
+			return err
+		}
+	}
+	if installer {
+		r, err := a.InstallerOutillageEtAttendre(ctx, func(e outils.Etape) {
+			if e.Progression >= 0 {
+				fmt.Printf("[%-14s] %3d %%  %s\n", e.Outil, e.Progression, e.Texte)
+			} else {
+				fmt.Printf("[%-14s]        %s\n", e.Outil, e.Texte)
+			}
+		})
+		if r != nil {
+			fmt.Println()
+			for _, t := range r.Tests {
+				fmt.Printf("  %-8s %s  %s\n", t.Outil, map[bool]string{true: "OK   ", false: "ÉCHEC"}[t.OK], t.Detail)
+			}
+			fmt.Printf("\n%s\nJournal remis au client : %s\n", r.Message, a.Outillage().Journal)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if controler {
+		res, err := a.EtatOutils()
+		if err != nil {
+			return err
+		}
+		for _, e := range res {
+			fmt.Printf("%-15s %-8s %-6s %s\n", e.Nom, e.Version, map[bool]string{true: "prêt", false: "—"}[e.Pret], e.Detail)
+			if e.SHA256 != "" {
+				fmt.Printf("%-15s SHA-256 %s%s\n", "", e.SHA256, map[bool]string{true: " · signé « " + e.Signataire + " »", false: ""}[e.Signataire != ""])
+			}
+		}
+	}
 	return nil
 }
 
