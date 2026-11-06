@@ -34,6 +34,11 @@ type Politique struct {
 	PlagesAutorisees []string `json:"plages_autorisees"`
 	LectureSeule     bool     `json:"lecture_seule"`
 	NmapVersionMin   string   `json:"nmap_version_min"`
+	// Profil : NOM d'un profil compilé (decouverte, standard, approfondi, industriel). Jamais d'option.
+	Profil string `json:"profil"`
+	// InclureFragiles : le mandat autorise explicitement l'examen des ports d'équipements fragiles
+	// (automates, impression) dans le profil industriel.
+	InclureFragiles bool `json:"inclure_fragiles"`
 }
 
 // ScriptsAutorises renvoie l'intersection triée entre la demande du serveur et la liste

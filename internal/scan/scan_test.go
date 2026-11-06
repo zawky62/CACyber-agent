@@ -15,10 +15,11 @@ func TestListeBlanche(t *testing.T) {
 	if strings.Join(refuses, ",") != "ftp-brute,smb-vuln-ms17-010,vuln" {
 		t.Fatalf("refusés : %v", refuses)
 	}
-	if _, err := ArgumentsNmap([]int{445}, []string{"smb-vuln-ms17-010"}, "T3", "c.txt"); err == nil {
+	std, _ := ProfilDepuis("standard")
+	if _, err := ArgumentsNmap(std, []int{445}, []string{"smb-vuln-ms17-010"}, "T3", "c.txt", false); err == nil {
 		t.Fatal("un script hors liste blanche aurait dû être refusé")
 	}
-	args, err := ArgumentsNmap([]int{445, 0, 70000, 445}, []string{"smb-protocols"}, "T5", "c.txt")
+	args, err := ArgumentsNmap(std, []int{445, 0, 70000, 445}, []string{"smb-protocols"}, "T5", "c.txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}

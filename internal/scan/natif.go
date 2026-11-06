@@ -41,6 +41,23 @@ type Progression func(fait, total int)
 
 // ScannerNatif examine les hôtes et renvoie ceux qui ont au moins un port ouvert.
 func ScannerNatif(ctx context.Context, hotes []netip.Addr, ports []int, prog Progression) []Hote {
+	return ScannerNatifProfil(ctx, hotes, ports, concurrenceMax, prog)
+}
+
+// ConcurrenceNative : connexions simultanées du scanner natif pour un profil (le profil industriel
+// n'ouvre qu'une connexion à la fois, comme --max-parallelism 1 pour Nmap).
+func (p ParametresProfil) ConcurrenceNative() int {
+	if p.MaxParallelisme > 0 {
+		return p.MaxParallelisme
+	}
+	return concurrenceMax
+}
+
+// ScannerNatifProfil : idem, avec un nombre maximal de connexions simultanées.
+func ScannerNatifProfil(ctx context.Context, hotes []netip.Addr, ports []int, concurrence int, prog Progression) []Hote {
+	if concurrence < 1 || concurrence > concurrenceMax {
+		concurrence = concurrenceMax
+	}
 	type cle struct {
 		ip   netip.Addr
 		port int
@@ -49,7 +66,7 @@ func ScannerNatif(ctx context.Context, hotes []netip.Addr, ports []int, prog Pro
 		mu      sync.Mutex
 		ouverts = map[netip.Addr][]int{}
 		wg      sync.WaitGroup
-		sem     = make(chan struct{}, concurrenceMax)
+		sem     = make(chan struct{}, concurrence)
 	)
 	travaux := make(chan cle)
 	go func() {

@@ -6,55 +6,30 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
+
+	"cacyber/agent/internal/outils"
 )
 
 // Intégration de Nmap (https://nmap.org) en SOUS-PROCESSUS.
 //
-// LICENCE : Nmap est distribué sous la « Nmap Public Source License ». Le redistribuer avec
-// CACyber-Agent (installateur commun, binaire embarqué) exige une licence OEM Nmap
-// (https://nmap.org/oem/). Tant qu'elle n'est pas acquise, l'agent utilise une installation de
-// Nmap faite par l'entité elle-même, ou se replie sur son scanner natif.
+// LICENCE : Nmap est un logiciel libre (Nmap Public Source License, NPSL), gratuit. L'agent ne le
+// redistribue pas et ne s'y lie pas : il appelle, en processus séparé, l'installation du poste
+// (installateur officiel de nmap.org), dont la signature Authenticode est vérifiée avant CHAQUE
+// exécution (paquet outils). Voir docs/NMAP.md.
 //
-// Garde-fous : options figées dans ce fichier, scripts limités à la liste blanche compilée
-// (catégorie « safe »), jamais d'option --script-args, jamais de catégorie de scripts, jamais de
-// scan UDP, de fragmentation, d'usurpation ou de détection d'OS agressive.
-
-// TrouverNmap cherche l'exécutable : chemin explicite, puis PATH, puis emplacements usuels.
-func TrouverNmap(explicite string) string {
-	if explicite != "" {
-		if st, err := os.Stat(explicite); err == nil && !st.IsDir() {
-			return explicite
-		}
-		return ""
-	}
-	if p, err := exec.LookPath("nmap"); err == nil {
-		return p
-	}
-	if runtime.GOOS == "windows" {
-		for _, base := range []string{os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramFiles")} {
-			if base == "" {
-				continue
-			}
-			p := filepath.Join(base, "Nmap", "nmap.exe")
-			if _, err := os.Stat(p); err == nil {
-				return p
-			}
-		}
-	}
-	return ""
-}
+// Garde-fous : options figées dans ce fichier et dans profils.go, scripts limités à la liste blanche
+// compilée (catégorie « safe »), jamais d'option --script-args, jamais de catégorie de scripts, jamais
+// de scan UDP, de fragmentation, d'usurpation ni de détection d'OS. Mode « connect » non privilégié
+// (--unprivileged -sT) : ni Npcap ni droits administrateur, comportement identique sur tout poste.
 
 var rxVersionNmap = regexp.MustCompile(`Nmap version ([\d.]+)`)
 
-// VersionNmap renvoie la version installée (« 7.95 ») ou une chaîne vide.
-func VersionNmap(ctx context.Context, chemin string) string {
-	out, err := exec.CommandContext(ctx, chemin, "--version").Output()
+// VersionNmap renvoie la version du Nmap vérifié (« 7.95 ») ou une chaîne vide.
+func VersionNmap(ctx context.Context, x *outils.Executable) string {
+	out, err := x.Commande(ctx, "--version").Output()
 	if err != nil {
 		return ""
 	}
@@ -64,30 +39,53 @@ func VersionNmap(ctx context.Context, chemin string) string {
 	return ""
 }
 
-// ArgumentsNmap construit la ligne de commande. Toute option vient d'ici ; la politique du
-// serveur ne fournit que des ports (entiers validés), un gabarit T2/T3 et des noms de scripts
-// filtrés par la liste blanche. Les cibles sont passées par fichier (-iL), jamais interprétées.
-func ArgumentsNmap(ports []int, scripts []string, timing, fichierCibles string) ([]string, error) {
+// ArgumentsNmap construit la ligne de commande. Toute option vient du code (profil) ; la politique
+// du serveur ne fournit qu'un NOM de profil, des ports (entiers validés), un gabarit T2/T3 et des
+// noms de scripts filtrés par la liste blanche. Les cibles sont passées par fichier (-iL), jamais
+// interprétées.
+func ArgumentsNmap(p ParametresProfil, ports []int, scripts []string, timing, fichierCibles string,
+	inclureFragiles bool) ([]string, error) {
 	for _, s := range scripts {
 		if !ListeBlancheNSE[s] {
 			return nil, fmt.Errorf("script Nmap refusé (hors liste blanche) : %q", s)
 		}
 	}
-	var ps []string
-	for _, p := range PortsValides(ports) {
-		ps = append(ps, strconv.Itoa(p))
+	ps := p.Ports(ports, inclureFragiles)
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("profil %s : aucun port autorisé à examiner", p.Nom)
 	}
-	args := []string{"-sT", "-sV", "--version-light", "-" + Timing(timing), "--max-retries", "1",
-		"--host-timeout", "5m", "-p", strings.Join(ps, ","), "-oX", "-", "-iL", fichierCibles}
-	if len(scripts) > 0 {
+	args := []string{"--unprivileged", "-sT"}
+	if p.DetectionVersion {
+		if p.IntensiteVersion == 2 {
+			args = append(args, "-sV", "--version-light")
+		} else {
+			args = append(args, "-sV", "--version-intensity", strconv.Itoa(p.IntensiteVersion))
+		}
+	}
+	args = append(args, "-"+p.TimingProfil(timing), "--max-retries", strconv.Itoa(p.MaxRetries),
+		"--host-timeout", p.HostTimeout)
+	if p.ScanDelay != "" {
+		args = append(args, "--scan-delay", p.ScanDelay)
+	}
+	if p.MaxRate > 0 {
+		args = append(args, "--max-rate", strconv.Itoa(p.MaxRate))
+	}
+	if p.MaxParallelisme > 0 {
+		args = append(args, "--max-parallelism", strconv.Itoa(p.MaxParallelisme))
+	}
+	if len(p.PortsDecouverte) > 0 {
+		args = append(args, "-PS"+joindre(p.PortsDecouverte))
+	}
+	args = append(args, "-p", joindre(ps), "-oX", "-", "-iL", fichierCibles)
+	if p.Scripts && len(scripts) > 0 {
 		args = append(args, "--script", strings.Join(scripts, ","))
 	}
 	return args, nil
 }
 
-// ExecuterNmap lance Nmap sur les hôtes fournis et convertit sa sortie XML en observations.
-func ExecuterNmap(ctx context.Context, chemin string, hotes []netip.Addr, ports []int, scripts []string,
-	timing string) ([]Hote, map[string]any, error) {
+// ExecuterNmap lance le Nmap VÉRIFIÉ sur les hôtes fournis et convertit sa sortie XML en observations.
+func ExecuterNmap(ctx context.Context, x *outils.Executable, p ParametresProfil, hotes []netip.Addr, ports []int,
+	scripts []string, timing string, inclureFragiles bool) ([]Hote, map[string]any, error) {
 	f, err := os.CreateTemp("", "cacyber-cibles-*.txt")
 	if err != nil {
 		return nil, nil, err
@@ -97,12 +95,11 @@ func ExecuterNmap(ctx context.Context, chemin string, hotes []netip.Addr, ports 
 		fmt.Fprintln(f, h.String())
 	}
 	_ = f.Close()
-	args, err := ArgumentsNmap(ports, scripts, timing, f.Name())
+	args, err := ArgumentsNmap(p, ports, scripts, timing, f.Name(), inclureFragiles)
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.CommandContext(ctx, chemin, args...)
-	out, err := cmd.Output()
+	out, err := x.Commande(ctx, args...).Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("exécution de Nmap : %w", err)
 	}
@@ -120,6 +117,9 @@ func ExecuterNmap(ctx context.Context, chemin string, hotes []netip.Addr, ports 
 	}
 	meta["arguments"] = strings.Join(argsTrace, " ")
 	meta["scripts"] = scripts
+	meta["profil"] = string(p.Nom)
+	meta["sha256"] = x.SHA256
+	meta["signataire"] = x.Signataire
 	return res, meta, nil
 }
 
