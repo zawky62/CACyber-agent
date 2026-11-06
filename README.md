@@ -91,6 +91,22 @@ BitLocker, centre de sécurité Windows (pare-feu, mises à jour, antivirus, UAC
 - Linux (SSH 22) : cinq commandes de lecture figées ; empreinte de la clé d'hôte relevée,
   `--ssh-known-hosts` pour refuser toute clé inconnue.
 
+## Active Directory « façon BloodHound »
+
+Sur un poste membre d'un domaine, l'agent lit l'annuaire **en lecture seule** (LDAP chiffré) :
+comptes, groupes, appartenances, droits (ACL), délégations. Puis :
+
+1. **Le serveur calcule les chemins** les plus courts menant aux comptes privilégiés et renvoie un
+   résumé. L'agent l'affiche sur l'écran **Résultat** et en mode `--cli` : compteurs, chemins
+   (« A --[GenericAll]--> B --[MembreDe]--> Admins du domaine ») et recommandations de durcissement.
+2. **L'agent écrit un export BloodHound CE** (`bloodhound-<domaine>-<AAAAMMJJ-HHMM>.zip`, format de
+   collecte v6) dans le dossier des journaux remis au client. Le cabinet peut l'importer dans son propre
+   BloodHound CE (« Upload Data »). L'export ne contient que ce qui a été collecté : appartenances, ACE et
+   délégations, sans sessions ni administrateurs locaux.
+
+SharpHound n'est jamais téléchargé ni exécuté. Le mode **démonstration** (`--demo`) contient un domaine
+fictif, `BREST.LOCAL`, pour voir le résultat sans domaine réel.
+
 ## Ce qui n'est JAMAIS fait
 
 Exploitation de faille, test d'intrusion, force brute, essai de mot de passe ou d'identifiant par
