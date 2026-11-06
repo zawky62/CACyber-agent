@@ -4,10 +4,10 @@ package ui
 // paramètres. Chaque écran est reprenable : il se reconstruit à partir de l'état de l'agent.
 
 import (
-	"os"
 	"errors"
 	"fmt"
 	"image/color"
+	"os"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -635,6 +635,7 @@ func (ui *Interface) ecranResultat() fyne.CanvasObject {
 		carte(container.NewHBox(badgeNote(m.Note, 104),
 			container.NewVBox(layout.NewSpacer(), libelleNote, ligneInfo("Score", score), ligneInfo("Constats", constats), layout.NewSpacer()))),
 		carteCouleur(CouleurVert, "Résultats transmis", message),
+		ui.carteAnnuaire(m),
 		paragraphe("L'analyse et la note sont établies par le serveur du cabinet à partir des observations transmises. "+
 			"Votre cabinet vous communiquera ses constats et recommandations. Une copie exacte des données transmises est conservée sur ce poste."),
 		container.NewHBox(ouvrir, layout.NewSpacer(), nouveau),

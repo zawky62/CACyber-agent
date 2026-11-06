@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
+	"cacyber/agent/internal/api"
 	"cacyber/agent/internal/app"
 	"cacyber/agent/internal/journal"
 	"cacyber/agent/internal/outils"
@@ -67,6 +68,30 @@ func TestEcransEtCaptures(t *testing.T) {
 				Message: "Résultats transmis au dossier du cabinet.", Journal: journalScan}
 			return c
 		}()},
+		{"5b-resultat-annuaire", EcranResultat, func() app.Contexte {
+			c := relie
+			age := 1900
+			ann := &api.ResumeAnnuaire{Domaine: "BREST.LOCAL", ComptesActifs: 9, ComptesPrivilegies: 3, ComptesAvecChemin: 1,
+				GroupesLargesExposes: []string{"Utilisateurs du domaine"}, Kerberoastables: 1, ASREP: 1, DelegationNonContrainte: 1,
+				ComptesInactifs: 2, KrbtgtAgeJours: &age,
+				Chemins: []api.CheminAD{
+					{Depuis: "Utilisateurs du domaine", Vers: "Admins du domaine", Etapes: []api.EtapeChemin{
+						{De: "Utilisateurs du domaine", Relation: "GenericAll", Vers: "admin.it"},
+						{De: "admin.it", Relation: "MemberOf", Vers: "Admins du domaine"}}},
+					{Depuis: "m.leroux", Vers: "Admins du domaine", Etapes: []api.EtapeChemin{
+						{De: "m.leroux", Relation: "MemberOf", Vers: "Support-Helpdesk"},
+						{De: "Support-Helpdesk", Relation: "ForceChangePassword", Vers: "admin.sauvegarde"},
+						{De: "admin.sauvegarde", Relation: "MemberOf", Vers: "Admins du domaine"}}},
+				}}
+			ann.LAPS = &struct {
+				Couverts int `json:"couverts"`
+				Total    int `json:"total"`
+			}{1, 3}
+			c.Mission = &journal.Instantane{Statut: journal.StatutTransmis, Note: "E", Score: entier(26), Constats: entier(31),
+				Message: "Résultats transmis au dossier du cabinet.", Journal: journalScan, Annuaire: ann,
+				ExportBloodHound: filepath.Join(os.TempDir(), "bloodhound-brest.local-20261106-1730.zip")}
+			return c
+		}()},
 		{"6-parametres", EcranParametres, relie},
 	}
 	cas = append(cas, struct {
@@ -86,7 +111,11 @@ func TestEcransEtCaptures(t *testing.T) {
 		moi, err := f.Verifier()
 		ui.connexion, ui.moi = ConnexionDepuis(moi, err), moi
 		w.SetContent(ui.Construire())
-		w.Resize(fyne.NewSize(1000, 700))
+		hauteur := float32(700)
+		if strings.Contains(c.nom, "annuaire") {
+			hauteur = 1500 // carte Active Directory entière sur la capture
+		}
+		w.Resize(fyne.NewSize(1000, hauteur))
 		ui.Afficher(c.ecran)
 		if asynchrone { // la liste des composants arrive en arrière-plan : attendre puis contrôler la mise en page
 			for i := 0; i < 200 && (ui.chargement || len(ui.etatsOutils) == 0); i++ {

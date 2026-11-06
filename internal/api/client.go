@@ -329,6 +329,41 @@ type Bilan struct {
 	Empreinte string `json:"empreinte"`
 	Constats  int    `json:"constats"`
 	Message   string `json:"message"`
+	// Annuaire : résumé « façon BloodHound » calculé PAR LE SERVEUR (absent sans données AD).
+	Annuaire *ResumeAnnuaire `json:"annuaire,omitempty"`
+}
+
+// EtapeChemin : maillon d'un chemin de contrôle (« de —relation→ vers »), en noms lisibles.
+type EtapeChemin struct {
+	De       string `json:"de"`
+	Relation string `json:"relation"`
+	Vers     string `json:"vers"`
+}
+
+// CheminAD : chemin de contrôle menant à un compte ou groupe privilégié (exposition à réduire).
+type CheminAD struct {
+	Depuis string        `json:"depuis"`
+	Vers   string        `json:"vers"`
+	Etapes []EtapeChemin `json:"etapes"`
+}
+
+// ResumeAnnuaire : synthèse défensive de l'annuaire Active Directory renvoyée par le serveur.
+type ResumeAnnuaire struct {
+	Domaine                 string     `json:"domaine"`
+	ComptesActifs           int        `json:"comptes_actifs"`
+	ComptesPrivilegies      int        `json:"comptes_privilegies"`
+	Chemins                 []CheminAD `json:"chemins"`
+	ComptesAvecChemin       int        `json:"comptes_avec_chemin"`
+	GroupesLargesExposes    []string   `json:"groupes_larges_exposes"`
+	Kerberoastables         int        `json:"kerberoastables"`
+	ASREP                   int        `json:"asrep"`
+	DelegationNonContrainte int        `json:"delegation_non_contrainte"`
+	ComptesInactifs         int        `json:"comptes_inactifs"`
+	KrbtgtAgeJours          *int       `json:"krbtgt_age_jours"`
+	LAPS                    *struct {
+		Couverts int `json:"couverts"`
+		Total    int `json:"total"`
+	} `json:"laps_couverture"`
 }
 
 // EnvoyerResultats transmet les observations brutes ; le serveur renvoie la note calculée.

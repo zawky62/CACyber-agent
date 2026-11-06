@@ -236,5 +236,30 @@ func modeConsole(ctx context.Context, a *app.App, racine string) error {
 	}
 	fmt.Printf("\nRésultat : note %s — score %d/100 — %d constats.\n%s\nJournal local : %s\n",
 		bilan.Note, bilan.Score, bilan.Constats, bilan.Message, strings.TrimSpace(racine)+string(os.PathSeparator)+"journaux")
+	afficherAnnuaire(bilan.Annuaire, m.Etat().ExportBloodHound)
 	return nil
+}
+
+// afficherAnnuaire : résumé « façon BloodHound » (calculé par le serveur) en mode console.
+func afficherAnnuaire(a *api.ResumeAnnuaire, export string) {
+	if a == nil {
+		fmt.Println("\nActive Directory : aucune donnée (poste hors domaine).")
+		return
+	}
+	fmt.Printf("\nActive Directory %s — chemins d'attaque (façon BloodHound), calculés par le serveur :\n", a.Domaine)
+	fmt.Printf("  Comptes actifs %d, privilégiés %d, non privilégiés avec un chemin %d\n", a.ComptesActifs, a.ComptesPrivilegies, a.ComptesAvecChemin)
+	if len(a.GroupesLargesExposes) > 0 {
+		fmt.Printf("  Groupes larges exposés : %s\n", strings.Join(a.GroupesLargesExposes, ", "))
+	}
+	fmt.Printf("  SPN (Kerberoast) %d · sans pré-authentification %d · délégation non contrainte %d · inactifs %d\n",
+		a.Kerberoastables, a.ASREP, a.DelegationNonContrainte, a.ComptesInactifs)
+	if a.KrbtgtAgeJours != nil {
+		fmt.Printf("  Mot de passe krbtgt changé il y a %d jours\n", *a.KrbtgtAgeJours)
+	}
+	for i, c := range a.Chemins {
+		fmt.Printf("  Chemin %d : %s\n", i+1, ui.ChaineChemin(c))
+	}
+	if export != "" {
+		fmt.Printf("  Export BloodHound CE : %s\n", export)
+	}
 }

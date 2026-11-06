@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"cacyber/agent/internal/annuaire"
 	"cacyber/agent/internal/api"
 	"cacyber/agent/internal/demo"
 	"cacyber/agent/internal/outils"
@@ -62,6 +63,10 @@ type Instantane struct {
 	Message     string  `json:"message"`
 	Journal     []Ligne `json:"journal"`
 	Mode        string  `json:"mode"`
+	// Annuaire : résumé « façon BloodHound » renvoyé par le serveur (nil sans données Active Directory).
+	Annuaire *api.ResumeAnnuaire `json:"annuaire,omitempty"`
+	// ExportBloodHound : chemin de l'archive BloodHound CE produite par l'agent ("" si aucune).
+	ExportBloodHound string `json:"export_bloodhound,omitempty"`
 }
 
 // Mission : un scan (collecte + transmission) pour le site relié.
@@ -203,6 +208,7 @@ func (m *Mission) Lancer(ctx context.Context) error {
 	m.mu.Lock()
 	m.obs, m.etat.Machines, m.etat.Ports = obs, machines, ports
 	m.mu.Unlock()
+	m.exporterBloodHound(obs)
 	m.log(6, "ok", fmt.Sprintf("Collecte terminée : %d machines, %d ports ouverts. Résultats prêts à être transmis au cabinet.", machines, ports), 90)
 	m.mu.Lock()
 	m.etat.Statut, m.etat.Etape, m.occupe = StatutCollecte, "Collecte terminée — prête à être transmise.", false
@@ -237,6 +243,7 @@ func (m *Mission) Transmettre() (*api.Bilan, error) {
 	m.mu.Lock()
 	c, s := bilan.Constats, bilan.Score
 	m.etat.Statut, m.etat.Constats, m.etat.Score, m.etat.Note = StatutTransmis, &c, &s, bilan.Note
+	m.etat.Annuaire = bilan.Annuaire
 	m.etat.Etape = fmt.Sprintf("Scan transmis — %d constats, note %s.", c, bilan.Note)
 	m.etat.Message = bilan.Message
 	m.scanID, m.occupe = "", false
@@ -429,6 +436,13 @@ func (m *Mission) collecteDemo(ctx context.Context) (*scan.Observations, error) 
 	pause(300 * time.Millisecond)
 	m.log(6, "info", "Comptes locaux, partages, sauvegardes et journalisation relevés.", 86)
 	pause(300 * time.Millisecond)
+	if o.AD != nil {
+		m.log(6, "info", "Annuaire Active Directory : lecture LDAP chiffrée (comptes, groupes, droits, délégations)…", 87)
+		pause(300 * time.Millisecond)
+		m.log(6, "info", fmt.Sprintf("Annuaire %s : %d objets, %d relations de contrôle relevées (lecture seule).",
+			o.AD.Domaine.Nom, len(o.AD.Noeuds), len(o.AD.Aretes)), 88)
+		pause(200 * time.Millisecond)
+	}
 	o.Nmap = map[string]any{"moteur": "demo"}
 	return &o, nil
 }
@@ -449,4 +463,22 @@ func dureeRestante(secs int) string {
 	default:
 		return fmt.Sprintf(" (environ %d min restantes)", (secs+30)/60)
 	}
+}
+
+// exporterBloodHound écrit l'export BloodHound CE de l'annuaire collecté dans le dossier des journaux
+// remis au client (l'analyse, elle, reste faite par le serveur). Sans annuaire : rien.
+func (m *Mission) exporterBloodHound(obs *scan.Observations) {
+	if obs.AD == nil {
+		return
+	}
+	chemin, err := annuaire.ExporterBloodHound(obs.AD, m.dossierJx, time.Now())
+	if err != nil {
+		m.log(6, "erreur", "Export BloodHound impossible : "+err.Error(), -1)
+		return
+	}
+	m.mu.Lock()
+	m.etat.ExportBloodHound = chemin
+	m.mu.Unlock()
+	m.log(6, "info", "Export BloodHound CE de l'annuaire enregistré : "+filepath.Base(chemin)+
+		" (à importer dans BloodHound CE : « Upload Data »).", -1)
 }
