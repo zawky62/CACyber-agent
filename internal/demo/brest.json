@@ -49,5 +49,260 @@
      "ports": [{"port": 135, "service": "msrpc"}, {"port": 445, "service": "microsoft-ds"}]},
     {"ip": "10.10.2.40", "nom": "IMPRIMANTE-ATELIER", "type": "imprimante", "os": {"nom": "Micrologiciel constructeur", "version": "2.1"},
      "ports": [{"port": 80, "service": "http", "http_auth_requise": false}, {"port": 161, "proto": "udp", "service": "snmp"}, {"port": 9100, "service": "jetdirect"}]}
-  ]
+  ],
+  "ad": {
+    "_doc": "Domaine fictif BREST.LOCAL (mode démonstration) : graphe brut, analysé par le serveur.",
+    "domaine": {
+      "nom": "BREST.LOCAL",
+      "sid": "S-1-5-21-1004336348-1177238915-682003330",
+      "niveau_fonctionnel": 7,
+      "controleurs": [
+        "DC01.BREST.LOCAL"
+      ]
+    },
+    "politique_mdp": {
+      "longueur_min": 7,
+      "historique": 5,
+      "age_max_jours": 0,
+      "seuil_verrouillage": 0,
+      "complexite": false
+    },
+    "quota_machines": 10,
+    "laps": {
+      "schema_legacy": true,
+      "schema_windows": false,
+      "ordinateurs_couverts": 1,
+      "ordinateurs_total": 3
+    },
+    "noeuds": [
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330",
+        "t": "d",
+        "n": "BREST.LOCAL"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "t": "g",
+        "n": "Admins du domaine",
+        "admincount": true
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-513",
+        "t": "g",
+        "n": "Utilisateurs du domaine"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-515",
+        "t": "g",
+        "n": "Ordinateurs du domaine"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-516",
+        "t": "g",
+        "n": "Contrôleurs de domaine",
+        "admincount": true
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1105",
+        "t": "g",
+        "n": "Support-Helpdesk"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1106",
+        "t": "g",
+        "n": "Comptabilite"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-500",
+        "t": "u",
+        "n": "Administrateur",
+        "actif": true,
+        "admincount": true,
+        "derniere_connexion": "@jours:-3",
+        "mdp_change": "@jours:-640"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-502",
+        "t": "u",
+        "n": "krbtgt",
+        "actif": false,
+        "admincount": true,
+        "mdp_change": "@jours:-1900"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1110",
+        "t": "u",
+        "n": "admin.it",
+        "actif": true,
+        "admincount": true,
+        "derniere_connexion": "@jours:-1",
+        "mdp_change": "@jours:-200"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1111",
+        "t": "u",
+        "n": "admin.sauvegarde",
+        "actif": true,
+        "admincount": true,
+        "mdp_sans_expiration": true,
+        "derniere_connexion": "@jours:-12",
+        "mdp_change": "@jours:-900"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1112",
+        "t": "u",
+        "n": "j.dupont",
+        "actif": true,
+        "derniere_connexion": "@jours:-1",
+        "mdp_change": "@jours:-60"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1113",
+        "t": "u",
+        "n": "m.leroux",
+        "actif": true,
+        "derniere_connexion": "@jours:-2",
+        "mdp_change": "@jours:-30"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1114",
+        "t": "u",
+        "n": "svc_sql",
+        "actif": true,
+        "spn": true,
+        "mdp_sans_expiration": true,
+        "derniere_connexion": "@jours:-1",
+        "mdp_change": "@jours:-1500"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1115",
+        "t": "u",
+        "n": "stagiaire2019",
+        "actif": true,
+        "asrep": true,
+        "derniere_connexion": "@jours:-410",
+        "mdp_change": "@jours:-700"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1116",
+        "t": "u",
+        "n": "ancien.dg",
+        "actif": true,
+        "derniere_connexion": "@jours:-230",
+        "mdp_change": "@jours:-400"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1117",
+        "t": "u",
+        "n": "a.martin",
+        "actif": true,
+        "derniere_connexion": "@jours:-5",
+        "mdp_change": "@jours:-80"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1000",
+        "t": "c",
+        "n": "DC01.BREST.LOCAL",
+        "actif": true,
+        "dc": true,
+        "os": "Windows Server 2016 Standard",
+        "derniere_connexion": "@jours:-1"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1120",
+        "t": "c",
+        "n": "SRV-FICHIERS.BREST.LOCAL",
+        "actif": true,
+        "deleg_nc": true,
+        "os": "Windows Server 2012 R2 Standard",
+        "derniere_connexion": "@jours:-1"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1121",
+        "t": "c",
+        "n": "PC-COMPTA01.BREST.LOCAL",
+        "actif": true,
+        "os": "Windows 10 Professionnel",
+        "derniere_connexion": "@jours:-1"
+      },
+      {
+        "id": "S-1-5-21-1004336348-1177238915-682003330-1122",
+        "t": "c",
+        "n": "PC-ACCUEIL.BREST.LOCAL",
+        "actif": true,
+        "os": "Windows 10 Professionnel",
+        "derniere_connexion": "@jours:-2"
+      }
+    ],
+    "aretes": [
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-500",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-512"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1110",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-512"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1111",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-512"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1113",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-1105"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1112",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-1106"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1117",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-1106"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1000",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-516"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1121",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-515"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1122",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-515"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1120",
+        "MemberOf",
+        "S-1-5-21-1004336348-1177238915-682003330-515"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-513",
+        "GenericAll",
+        "S-1-5-21-1004336348-1177238915-682003330-1110"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1105",
+        "ForceChangePassword",
+        "S-1-5-21-1004336348-1177238915-682003330-1111"
+      ],
+      [
+        "S-1-5-21-1004336348-1177238915-682003330-1106",
+        "WriteDacl",
+        "S-1-5-21-1004336348-1177238915-682003330-1120"
+      ]
+    ],
+    "tronque": false,
+    "lien": "ldaps",
+    "collecte": "ldap"
+  }
 }
