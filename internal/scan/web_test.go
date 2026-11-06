@@ -124,3 +124,25 @@ func hotePort(t *testing.T, a net.Addr) (string, int) {
 	n, _ := strconv.Atoi(p)
 	return h, n
 }
+
+// Requêtes osquery : SELECT uniquement.
+func TestRequetesOsqueryLectureSeule(t *testing.T) {
+	for nom, q := range RequetesOsquery {
+		if err := RequeteLectureSeule(q); err != nil {
+			t.Errorf("%s : %v", nom, err)
+		}
+	}
+	for _, q := range []string{"select 1; delete from x", "insert into t values(1)", "attach '/tmp/x' as y", "pragma x"} {
+		if RequeteLectureSeule(q) == nil {
+			t.Errorf("requête dangereuse acceptée : %s", q)
+		}
+	}
+	o, err := AnalyserOsquery(map[string][]map[string]string{
+		"version":   {{"version": "5.24.1"}},
+		"bitlocker": {{"drive_letter": "C:", "protection_status": "0"}},
+		"securite":  {{"firewall": "Poor", "autoupdate": "Good", "antivirus": "Good", "user_account_control": "Good"}},
+	})
+	if err != nil || o.Version != "5.24.1" || len(o.BitLocker) != 1 || o.BitLocker[0].Protection || o.PareFeu != "Poor" {
+		t.Fatalf("analyse osquery incorrecte : %+v %v", o, err)
+	}
+}

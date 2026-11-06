@@ -211,6 +211,12 @@ func modeConsole(ctx context.Context, a *app.App, racine string) error {
 		return errors.New("aucun mandat signé et valide ne couvre ce site : scan impossible")
 	}
 	fmt.Printf("Mandat valide jusqu'au %s. Lecture seule.\n", moi.MandatFin)
+	// Collectes complémentaires (annuaire, inventaire authentifié) : identifiants saisis ici, en mémoire.
+	comp, err := complementsDepuisOptions()
+	if err != nil {
+		return err
+	}
+	a.DefinirComplements(comp)
 
 	// Affichage du journal au fil de l'eau.
 	m := a.Mission()

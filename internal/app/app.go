@@ -169,6 +169,17 @@ func (a *App) Oublier() error {
 	return nil
 }
 
+// DefinirComplements transmet à la mission les paramètres des collectes complémentaires (annuaire,
+// inventaire authentifié) ; les identifiants restent en mémoire et sont effacés après la collecte.
+func (a *App) DefinirComplements(c journal.Complements) {
+	a.mu.Lock()
+	m := a.mission
+	a.mu.Unlock()
+	if m != nil {
+		m.DefinirComplements(c)
+	}
+}
+
 // Mission courante (mode console).
 func (a *App) Mission() *journal.Mission { return a.mission }
 

@@ -73,6 +73,9 @@ type Mission struct {
 	version   string
 	dossierJx string
 
+	// complements : paramètres des collectes complémentaires (identifiants en mémoire).
+	complements Complements
+
 	etat    Instantane
 	scanID  string
 	obs     *scan.Observations
@@ -311,6 +314,7 @@ func (m *Mission) collecteReelle(ctx context.Context, pol scan.Politique) (*scan
 		m.rattacherInventaire(obs, inv, sys)
 		m.resumerInventaire(inv)
 	}
+	m.collecteComplementaire(ctx, obs, pol, profil)
 	return obs, nil
 }
 
