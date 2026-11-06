@@ -116,7 +116,9 @@ func (d *Dossier) Charger() (*Etat, error) {
 	if err := json.Unmarshal(data, &e); err != nil {
 		return nil, fmt.Errorf("etat.json illisible : %w", err)
 	}
-	for _, f := range []string{d.CheminCle(), d.CheminCertificat(), d.CheminCA()} {
+	// Seule la clé privée est indispensable (le serveur authentifie l'agent par signature de chaque
+	// requête) ; certificat et CA ne sont plus produits depuis l'abandon du TLS mutuel.
+	for _, f := range []string{d.CheminCle()} {
 		if _, err := os.Stat(f); err != nil {
 			return nil, nil // identité incomplète : appairage à refaire
 		}
@@ -135,6 +137,9 @@ func (d *Dossier) Enregistrer(e *Etat, clePEM, certPEM, caPEM []byte) error {
 		data   []byte
 		mode   os.FileMode
 	}{{d.CheminCle(), cleProtegee, 0o600}, {d.CheminCertificat(), certPEM, 0o644}, {d.CheminCA(), caPEM, 0o644}} {
+		if f.data == nil {
+			continue // certificat / CA facultatifs (identité par clé seule)
+		}
 		if err := ecrireAtomique(f.chemin, f.data, f.mode); err != nil {
 			return err
 		}

@@ -1,9 +1,11 @@
-// Package api dialogue avec le serveur CACyber.
+// Package api dialogue avec le serveur CACyber (fonctions Supabase), en HTTPS uniquement.
 //
-//   - Appairage (application principale, HTTPS) : le code à usage unique et une CSR générée
-//     localement sont échangés contre un certificat client lié au site et au mandat signé.
-//   - Ensuite, tout passe par l'écoute mTLS des agents : le certificat client est présenté en TLS
-//     ET chaque requête est signée par la clé de l'agent (preuve de possession, anti-rejeu).
+//   - Appairage : une paire de clés ECDSA P-256 est générée SUR LE POSTE (la clé privée ne le quitte
+//     jamais, elle est protégée par DPAPI) ; le code à usage unique et la clé PUBLIQUE sont envoyés,
+//     dans une requête signée par la clé privée (preuve de possession).
+//   - Ensuite, CHAQUE requête est signée : méthode, chemin, horodatage, nonce unique et SHA-256 du
+//     corps. Le serveur refuse toute requête modifiée, rejouée ou hors fenêtre de ±5 minutes.
+//     (Remplace le TLS mutuel, impossible derrière le relais HTTPS des fonctions.)
 //
 // Le serveur ne renvoie jamais de commande à exécuter : uniquement un contexte (site, client) et
 // une politique bornée, recoupée par la liste blanche compilée de l'agent.
@@ -17,7 +19,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -40,11 +41,31 @@ import (
 
 // ----------------------------------------------------------------------------- signature
 
-// MessageASigner reproduit exactement backend/app/pki.py:message_a_signer :
-// « MÉTHODE\nCHEMIN\nHORODATAGE\nsha256hex(corps) ». Le chemin ne comprend pas la requête (?…).
-func MessageASigner(methode, chemin, horodatage string, corps []byte) []byte {
+// MessageASigner reproduit exactement supabase/functions/_shared/signature_agent.ts :
+// « MÉTHODE\nCHEMIN\nHORODATAGE\nNONCE\nsha256hex(corps) ». Le chemin ne comprend pas la requête (?…).
+func MessageASigner(methode, chemin, horodatage, nonce string, corps []byte) []byte {
 	h := sha256.Sum256(corps)
-	return []byte(strings.Join([]string{strings.ToUpper(methode), chemin, horodatage, hex.EncodeToString(h[:])}, "\n"))
+	return []byte(strings.Join([]string{strings.ToUpper(methode), chemin, horodatage, nonce, hex.EncodeToString(h[:])}, "\n"))
+}
+
+// NouveauNonce : 24 octets aléatoires en base64url (32 caractères), à usage unique (anti-rejeu).
+func NouveauNonce() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // générateur aléatoire du système indisponible : rien de sûr n'est possible
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// entetesSignes calcule les en-têtes d'authentification d'une requête.
+func entetesSignes(cle *ecdsa.PrivateKey, methode, chemin string, corps []byte) (map[string]string, error) {
+	horo := strconv.FormatInt(time.Now().Unix(), 10)
+	nonce := NouveauNonce()
+	sig, err := Signer(cle, MessageASigner(methode, chemin, horo, nonce, corps))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"X-CAC-Horodatage": horo, "X-CAC-Nonce": nonce, "X-CAC-Signature": sig}, nil
 }
 
 // Signer : ECDSA P-256 / SHA-256, signature ASN.1 DER encodée en base64.
@@ -62,10 +83,7 @@ func Signer(cle *ecdsa.PrivateKey, message []byte) (string, error) {
 // ReponseEnrolement : ce que renvoie POST /agent/v1/enrolement.
 type ReponseEnrolement struct {
 	AgentID    string         `json:"agent_id"`
-	Certificat string         `json:"certificat"`
-	CA         string         `json:"ca"`
 	ExpireLe   string         `json:"expire_le"`
-	URLMTLS    string         `json:"url_mtls"`
 	Site       string         `json:"site"`
 	SIRET      string         `json:"siret"`
 	Client     string         `json:"client"`
@@ -125,12 +143,13 @@ func VerifierURLServeur(brut string, dev bool) (*url.URL, error) {
 	return u, nil
 }
 
-// Enroler génère la clé et la CSR, présente le code d'appairage et enregistre l'identité reçue.
+// Enroler génère la paire de clés, présente le code d'appairage avec la clé publique (requête signée
+// par la clé privée : preuve de possession) et enregistre l'identité reçue.
 //
-// Confiance dans la CA renvoyée : elle n'est acceptée que si l'appairage lui-même a eu lieu sur
-// un canal authentifié (HTTPS vérifié par le magasin de certificats du système) ou vers ce poste
-// (localhost / --dev). Si --ca est fourni, la CA renvoyée doit lui être identique (épinglage).
+// Le serveur est authentifié par HTTPS (magasin de certificats du système). `caEpinglee` est conservé
+// pour compatibilité de l'interface ; il n'est plus utilisé (plus d'autorité de certification interne).
 func Enroler(serveur *url.URL, code, version string, caEpinglee []byte, dev bool, d *etat.Dossier) (*etat.Etat, *ReponseEnrolement, error) {
+	_ = caEpinglee
 	if serveur.Scheme == "http" && !EstLocal(serveur) && !dev {
 		return nil, nil, errors.New("appairage refusé sur un canal non chiffré")
 	}
@@ -138,23 +157,32 @@ func Enroler(serveur *url.URL, code, version string, caEpinglee []byte, dev bool
 	if err != nil {
 		return nil, nil, err
 	}
-	nomHote, _ := os.Hostname()
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: "cacyber-agent", Organization: []string{"CACyber"}},
-	}, cle)
+	spki, err := x509.MarshalPKIXPublicKey(&cle.PublicKey)
 	if err != nil {
 		return nil, nil, err
 	}
+	nomHote, _ := os.Hostname()
 	corps, _ := json.Marshal(map[string]string{
-		"code":     code,
-		"csr":      string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})),
-		"nom_hote": nomHote,
-		"systeme":  runtime.GOOS + "/" + runtime.GOARCH,
-		"version":  version,
+		"code":         code,
+		"cle_publique": base64.StdEncoding.EncodeToString(spki),
+		"nom_hote":     nomHote,
+		"systeme":      runtime.GOOS + "/" + runtime.GOARCH,
+		"version":      version,
 	})
-	cli := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, Proxy: http.ProxyFromEnvironment}}
-	resp, err := cli.Post(serveur.String()+"/agent/v1/enrolement", "application/json", bytes.NewReader(corps))
+	const chemin = "/agent/v1/enrolement"
+	h, err := entetesSignes(cle, http.MethodPost, chemin, corps)
+	if err != nil {
+		return nil, nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, serveur.String()+chemin, bytes.NewReader(corps))
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range h {
+		req.Header.Set(k, v)
+	}
+	resp, err := clientHTTP(30 * time.Second).Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("serveur injoignable : %w", err)
 	}
@@ -166,48 +194,23 @@ func Enroler(serveur *url.URL, code, version string, caEpinglee []byte, dev bool
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&r); err != nil {
 		return nil, nil, fmt.Errorf("réponse d'appairage illisible : %w", err)
 	}
-	if caEpinglee != nil && strings.TrimSpace(string(caEpinglee)) != strings.TrimSpace(r.CA) {
-		return nil, nil, errors.New("la CA renvoyée par le serveur ne correspond pas à la CA épinglée (--ca) : appairage annulé")
-	}
-	// Contrôle de cohérence : le certificat reçu porte bien NOTRE clé publique et émane de la CA.
-	if err := verifierCertificat(r.Certificat, r.CA, &cle.PublicKey); err != nil {
-		return nil, nil, err
-	}
-	if r.URLMTLS == "" {
-		return nil, nil, errors.New("le serveur n'a pas indiqué l'adresse de l'écoute mTLS")
+	if r.AgentID == "" {
+		return nil, nil, errors.New("réponse d'appairage incomplète")
 	}
 	cleDER, _ := x509.MarshalECPrivateKey(cle)
-	e := &etat.Etat{AgentID: r.AgentID, Serveur: serveur.String(), URLMTLS: strings.TrimRight(r.URLMTLS, "/"),
-		Site: r.Site, SIRET: r.SIRET, Client: r.Client, Cabinet: r.Cabinet, ExpireLe: r.ExpireLe}
-	err = d.Enregistrer(e, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: cleDER}),
-		[]byte(r.Certificat), []byte(r.CA))
+	e := &etat.Etat{AgentID: r.AgentID, Serveur: serveur.String(), Site: r.Site, SIRET: r.SIRET, Client: r.Client,
+		Cabinet: r.Cabinet, ExpireLe: r.ExpireLe}
+	err = d.Enregistrer(e, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: cleDER}), nil, nil)
 	return e, &r, err
 }
 
-func verifierCertificat(certPEM, caPEM string, pub *ecdsa.PublicKey) error {
-	b, _ := pem.Decode([]byte(certPEM))
-	if b == nil {
-		return errors.New("certificat reçu illisible")
-	}
-	cert, err := x509.ParseCertificate(b.Bytes)
-	if err != nil {
-		return err
-	}
-	if p, ok := cert.PublicKey.(*ecdsa.PublicKey); !ok || !p.Equal(pub) {
-		return errors.New("le certificat reçu ne correspond pas à la clé générée")
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM([]byte(caPEM)) {
-		return errors.New("CA reçue illisible")
-	}
-	_, err = cert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
-	if err != nil {
-		return fmt.Errorf("certificat non émis par la CA du serveur : %w", err)
-	}
-	return nil
+// clientHTTP : TLS 1.2 minimum, certificat du serveur vérifié par le magasin du système, proxy d'entreprise respecté.
+func clientHTTP(delai time.Duration) *http.Client {
+	return &http.Client{Timeout: delai, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, Proxy: http.ProxyFromEnvironment}}
 }
 
-// ----------------------------------------------------------------------------- client mTLS
+// ----------------------------------------------------------------------------- client signé
 
 // Client : session authentifiée d'un agent relié.
 type Client struct {
@@ -217,45 +220,27 @@ type Client struct {
 	base string
 }
 
-// NouveauClient charge l'identité et prépare la connexion mTLS (TLS 1.2 minimum, CA du serveur
-// seule autorité acceptée, certificat client présenté).
+// NouveauClient charge la clé de l'agent (déchiffrée en mémoire par DPAPI sous Windows : elle n'existe
+// jamais en clair sur disque) et prépare les requêtes signées vers le serveur.
 func NouveauClient(e *etat.Etat, d *etat.Dossier) (*Client, error) {
-	// La clé est déchiffrée en mémoire (DPAPI sous Windows) : elle n'existe jamais en clair sur disque.
-	certPEM, err := os.ReadFile(d.CheminCertificat())
-	if err != nil {
-		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
-	}
 	clePEM, err := d.LireCle()
 	if err != nil {
 		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
 	}
-	paire, err := tls.X509KeyPair(certPEM, clePEM)
-	if err != nil {
-		return nil, fmt.Errorf("identité de l'agent illisible : %w", err)
+	b, _ := pem.Decode(clePEM)
+	if b == nil {
+		return nil, errors.New("identité de l'agent illisible : clé absente")
 	}
-	caPEM, err := os.ReadFile(d.CheminCA())
-	if err != nil {
-		return nil, err
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(caPEM) {
-		return nil, errors.New("CA du serveur illisible")
-	}
-	cle, ok := paire.PrivateKey.(*ecdsa.PrivateKey)
-	if !ok {
+	cle, err := x509.ParseECPrivateKey(b.Bytes)
+	if err != nil || cle.Curve != elliptic.P256() {
 		return nil, errors.New("clé de l'agent inattendue (ECDSA P-256 attendue)")
 	}
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool, Certificates: []tls.Certificate{paire}},
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	return &Client{etat: e, cle: cle, base: e.URLMTLS, http: &http.Client{Timeout: 120 * time.Second, Transport: tr}}, nil
+	return &Client{etat: e, cle: cle, base: strings.TrimRight(e.Serveur, "/"), http: clientHTTP(120 * time.Second)}, nil
 }
 
 // requete envoie une requête signée et décode la réponse JSON dans `sortie`.
 func (c *Client) requete(methode, chemin, requete string, corps []byte, sortie any) error {
-	horo := strconv.FormatInt(time.Now().Unix(), 10)
-	sig, err := Signer(c.cle, MessageASigner(methode, chemin, horo, corps))
+	h, err := entetesSignes(c.cle, methode, chemin, corps)
 	if err != nil {
 		return err
 	}
@@ -269,11 +254,12 @@ func (c *Client) requete(methode, chemin, requete string, corps []byte, sortie a
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-CAC-Agent", c.etat.AgentID)
-	req.Header.Set("X-CAC-Horodatage", horo)
-	req.Header.Set("X-CAC-Signature", sig)
+	for k, v := range h {
+		req.Header.Set(k, v)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("écoute des agents injoignable (%s) : %w", c.base, err)
+		return fmt.Errorf("serveur CACyber injoignable (%s) : %w", c.base, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
