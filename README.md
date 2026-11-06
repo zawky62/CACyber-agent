@@ -25,8 +25,9 @@ agent/
     ├── app/        état de l'agent et actions (relier, lancer, transmettre, changer de code)
     ├── demo/       jeu « Usine de Brest » embarqué (mode --demo)
     ├── etat/       dossier de l'agent : clé, certificat, CA, etat.json, journaux
-    ├── journal/    orchestration du scan, étapes, journal lisible
-    ├── scan/       cibles, Nmap (liste blanche), scanner natif, inventaire Windows, schéma
+    ├── journal/    orchestration du scan, étapes, journal lisible, bilan de l'outillage
+    ├── outils/     outillage open source : manifeste épinglé, installation, vérification, auto-test
+    ├── scan/       cibles, Nmap (liste blanche, profils), scanner natif, inventaire Windows, schéma
     └── ui/         interface locale embarquée (127.0.0.1)
 ```
 
@@ -89,7 +90,11 @@ CACCyber-Agent.exe --demo                           réseau simulé, appairage e
 | `--code CODE` | appairage non interactif |
 | `--demo` | jeu de démonstration « Usine de Brest » |
 | `--cli` | mode console |
-| `--nmap CHEMIN` | exécutable Nmap (sinon PATH, puis `Program Files\Nmap`) |
+| `--nmap CHEMIN` | exécutable Nmap (sinon `Program Files\Nmap`, puis PATH) ; signature de l'éditeur exigée sous Windows |
+| `--installer-outils` | installe et vérifie osquery, Nuclei et les modèles, exécute l'auto-test, écrit le bilan au journal |
+| `--etat-outils` | contrôle l'outillage (empreintes, signatures) sans rien télécharger |
+| `--installer-nmap` | télécharge l'installateur officiel de Nmap, le vérifie et l'ouvre en mode interactif (UAC) |
+| `--npcap` | ouvre la page officielle de Npcap (option des scans avancés) |
 | `--ca FICHIER` | épingle la CA attendue du serveur |
 | `--donnees DOSSIER` | dossier de l'agent (défaut `%ProgramData%\CACyber\Agent`) |
 | `--reinitialiser` | oublie l'appairage |
@@ -129,8 +134,25 @@ signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ^
 signtool verify /pa /v bin\CACCyber-Agent.exe
 ```
 
-## Nmap et licence OEM
+## Outillage open source et Nmap
 
-Nmap est utilisé **en sous-processus** s'il est installé sur le poste. Le redistribuer avec l'agent
-(installateur commun, binaire embarqué) requiert une **licence OEM Nmap** (https://nmap.org/oem/).
-Sans Nmap, le scanner natif fournit ports, bannières et versions TLS (sans versions SMB négociées).
+Voir `docs/NMAP.md` (argumentation, licence NPSL, profils de scan) et `docs/OUTILS.md` (manifeste,
+empreintes).
+
+**Nmap**
+- Nmap est appelé **en sous-processus** et n'est **pas redistribué**.
+- L'agent utilise l'installation présente sur le poste, dont la signature est vérifiée avant chaque
+  exécution. Si elle est absente, il propose l'installateur officiel.
+- Aucune licence OEM n'est nécessaire.
+- Sans Nmap, le scanner natif fournit les ports, les bannières et les versions TLS, mais pas les versions
+  SMB négociées.
+
+**osquery et Nuclei** sont installés pour l'utilisateur courant, sans droits administrateur, dans
+`%LOCALAPPDATA%\CACyber\outils`. Les outils sont lancés sans fenêtre de console.
+
+**Antivirus**
+- Une compilation **non signée** de l'agent peut être signalée par un antivirus. C'est arrivé une fois
+  avec Defender (« Trojan:Win32/Bearfoos.A!ml », heuristique) sur un binaire de test placé dans un dossier
+  temporaire.
+- La signature de code (section précédente) est donc indispensable avant toute diffusion.
+- Communiquez au service informatique du client les empreintes et l'éditeur de l'agent.

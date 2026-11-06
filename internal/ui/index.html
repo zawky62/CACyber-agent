@@ -59,6 +59,11 @@
   .bas { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
   .message { color: var(--green); font-weight: 600; font-size: 13px; margin-top: 8px; }
   .pied { text-align: center; margin-top: 14px; }
+  .outillage { margin-top: 18px; }
+  .outillage h2 { font-size: 15px; margin: 0 0 6px; }
+  .outillage ul { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; }
+  .outillage li.ko { color: #B42318; }
+  .outillage .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -107,6 +112,22 @@
     </div>
     <div class="erreur" id="err-scan" role="alert"></div>
     <div class="message" id="message"></div>
+  </section>
+
+  <!-- Outillage open source : mise en place, vérification, auto-test (brief §12.2) -->
+  <section class="carte outillage" aria-labelledby="titre-outillage">
+    <h2 id="titre-outillage">Outillage de scan (open source, gratuit)</h2>
+    <p class="muted">Nmap, osquery et Nuclei, téléchargés depuis leurs sources officielles, vérifiés (empreinte SHA-256,
+      signature de l'éditeur) avant chaque utilisation. Mode « connect » : ni pilote ni droits administrateur.</p>
+    <div class="etape"><span id="o-etape">Outillage non vérifié.</span><span class="muted" id="o-pct"></span></div>
+    <div class="barre" id="o-barre"><span style="width:0%"></span></div>
+    <ul id="o-tests"></ul>
+    <div class="actions">
+      <button class="secondaire" id="btn-outils">Installer / vérifier l'outillage</button>
+      <button class="lien" id="btn-nmap" title="Installateur officiel nmap.org, vérifié ; Windows demandera votre accord">Installer Nmap (officiel)</button>
+      <button class="lien" id="btn-npcap" title="Facultatif : scans avancés SYN / empreinte d'OS">Npcap (option avancée)</button>
+    </div>
+    <div class="erreur" id="err-outils" role="alert"></div>
   </section>
 </main>
 <script>
@@ -166,7 +187,32 @@ function afficher(c) {
   nbLignes = j.length;
 }
 
-async function rafraichir() { try { afficher(await appel("/api/etat")); } catch (e) { /* agent arrêté */ } }
+function afficherOutillage(o) {
+  if (!o) return;
+  const enCours = o.statut === "installation";
+  $("btn-outils").disabled = enCours;
+  $("btn-outils").textContent = enCours ? "Mise en place en cours…" : "Installer / vérifier l'outillage";
+  $("o-etape").textContent = o.etape || (o.statut === "inconnu" ? "Outillage non vérifié." : "");
+  $("o-pct").textContent = enCours || o.progression ? (o.progression || 0) + " %" : "";
+  $("o-barre").firstElementChild.style.width = (o.progression || 0) + "%";
+  $("o-barre").classList.toggle("fini", o.statut === "pret");
+  const ul = $("o-tests");
+  ul.textContent = "";
+  for (const t of (o.rapport && o.rapport.tests) || []) {
+    const li = document.createElement("li");
+    li.className = t.ok ? "ok" : "ko";
+    li.textContent = (t.ok ? "✓ " : "✗ ") + t.outil + " — " + t.detail;
+    ul.appendChild(li);
+  }
+  if (o.journal) {
+    const li = document.createElement("li");
+    li.textContent = "Journal remis au client : " + o.journal;
+    ul.appendChild(li);
+  }
+  if (o.statut === "erreur") $("err-outils").textContent = o.message || "";
+}
+
+async function rafraichir() { try { const c = await appel("/api/etat"); afficher(c); afficherOutillage(c.outillage); } catch (e) { /* agent arrêté */ } }
 
 $("btn-relier").onclick = async () => {
   $("err-code").textContent = ""; $("btn-relier").disabled = true; $("btn-relier").textContent = "Appairage en cours…";
@@ -183,6 +229,21 @@ $("btn-transmettre").onclick = async () => {
 $("btn-oublier").onclick = async () => {
   if (!confirm("Oublier l'appairage de ce poste ? Un nouveau code sera nécessaire.")) return;
   try { afficher(await appel("/api/oublier", {})); } catch (e) { $("err-scan").textContent = e.message; }
+};
+$("btn-outils").onclick = async () => {
+  $("err-outils").textContent = "";
+  try { afficherOutillage((await appel("/api/outillage/installer", {})).outillage); } catch (e) { $("err-outils").textContent = e.message; }
+};
+$("btn-nmap").onclick = async () => {
+  if (!confirm("Télécharger l'installateur officiel de Nmap (nmap.org), le vérifier puis l'ouvrir ? Windows vous demandera votre accord ; Npcap peut être décoché.")) return;
+  $("err-outils").textContent = ""; $("btn-nmap").disabled = true; $("btn-nmap").textContent = "Téléchargement et vérification…";
+  try { await appel("/api/outillage/nmap", {}); $("o-etape").textContent = "Installateur Nmap vérifié et ouvert : suivez la fenêtre d'installation, puis cliquez sur « Installer / vérifier »."; }
+  catch (e) { $("err-outils").textContent = e.message; }
+  finally { $("btn-nmap").disabled = false; $("btn-nmap").textContent = "Installer Nmap (officiel)"; }
+};
+$("btn-npcap").onclick = async () => {
+  if (!confirm("Npcap n'est utile qu'aux scans avancés (SYN, empreinte d'OS) et demande des droits administrateur. Ouvrir sa page officielle ?")) return;
+  try { await appel("/api/outillage/npcap", {}); } catch (e) { $("err-outils").textContent = e.message; }
 };
 rafraichir();
 setInterval(rafraichir, 700);

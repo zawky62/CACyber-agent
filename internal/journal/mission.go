@@ -16,6 +16,7 @@ import (
 
 	"cacyber/agent/internal/api"
 	"cacyber/agent/internal/demo"
+	"cacyber/agent/internal/outils"
 	"cacyber/agent/internal/scan"
 )
 
@@ -256,15 +257,26 @@ func (m *Mission) collecteReelle(ctx context.Context, pol scan.Politique) (*scan
 		len(cibles.Hotes), map[bool]string{true: " (limite atteinte)", false: ""}[cibles.Tronque]), 8)
 	obs := &scan.Observations{Mode: "reel", Reseaux: cibles.Reseaux}
 
-	ports := scan.PortsValides(pol.Ports)
-	if chemin := scan.TrouverNmap(m.nmap); chemin != "" {
+	profil, connu := scan.ProfilDepuis(pol.Profil)
+	if !connu {
+		m.log(2, "erreur", fmt.Sprintf("Profil de scan inconnu (%q) : profil Standard appliqué.", pol.Profil), -1)
+	}
+	ports := profil.Ports(pol.Ports, pol.InclureFragiles)
+	m.log(1, "info", fmt.Sprintf("Profil de scan : %s (%d ports examinés%s).", profil.Libelle, len(ports),
+		map[bool]string{true: ", équipements fragiles exclus", false: ""}[profil.ExclureFragiles && !pol.InclureFragiles]), 10)
+	if x, err := outils.PreparerNmap(m.nmap); err == nil {
+		defer x.Fermer() // verrou d'écriture conservé jusqu'à la fin de la collecte
 		scripts, refuses := scan.ScriptsAutorises(pol.ScriptsNSE)
 		if len(refuses) > 0 {
 			m.log(2, "erreur", "Scripts demandés hors liste blanche, ignorés : "+strings.Join(refuses, ", ")+".", -1)
 		}
-		version := scan.VersionNmap(ctx, chemin)
-		m.log(2, "info", fmt.Sprintf("Nmap %s : connexions TCP, détection des versions, scripts « safe » : %s.", version, strings.Join(scripts, ", ")), 15)
-		hotes, meta, err := scan.ExecuterNmap(ctx, chemin, cibles.Hotes, ports, scripts, pol.Timing)
+		if !profil.Scripts {
+			scripts = nil
+		}
+		version := scan.VersionNmap(ctx, x)
+		m.log(2, "info", fmt.Sprintf("Nmap %s (signé « %s », empreinte %s…) : connexions TCP sans droits administrateur, détection des versions, scripts « safe » : %s.",
+			version, x.Signataire, x.SHA256[:12], valeurOu(strings.Join(scripts, ", "), "aucun")), 15)
+		hotes, meta, err := scan.ExecuterNmap(ctx, x, profil, cibles.Hotes, pol.Ports, scripts, pol.Timing, pol.InclureFragiles)
 		if err != nil {
 			m.log(2, "erreur", err.Error()+" — repli sur le scanner natif.", -1)
 		} else {
@@ -276,15 +288,15 @@ func (m *Mission) collecteReelle(ctx context.Context, pol scan.Politique) (*scan
 			}
 		}
 	} else {
-		m.log(2, "info", "Nmap absent : scanner natif (connexions TCP, bannières, versions TLS).", 15)
+		m.log(2, "info", "Nmap indisponible ou non vérifié ("+err.Error()+") : scanner natif (connexions TCP, bannières, versions TLS).", 15)
 	}
 	if obs.Hotes == nil {
-		obs.Hotes = scan.ScannerNatif(ctx, cibles.Hotes, ports, func(fait, total int) {
+		obs.Hotes = scan.ScannerNatifProfil(ctx, cibles.Hotes, ports, profil.ConcurrenceNative(), func(fait, total int) {
 			if total > 0 && fait%16 == 0 {
 				m.progresser(15 + fait*45/total)
 			}
 		})
-		obs.Nmap = map[string]any{"moteur": "natif"}
+		obs.Nmap = map[string]any{"moteur": "natif", "profil": string(profil.Nom)}
 	}
 	m.log(1, "info", fmt.Sprintf("%d machines répondent sur le réseau.", len(obs.Hotes)), 60)
 	for i := range obs.Hotes {

@@ -55,6 +55,9 @@ func Demarrer(ctx context.Context, a *app.App) (string, *http.Server, error) {
 	mux.HandleFunc("POST /api/lancer", s.api(s.lancer))
 	mux.HandleFunc("POST /api/transmettre", s.api(s.transmettre))
 	mux.HandleFunc("POST /api/oublier", s.api(s.oublier))
+	mux.HandleFunc("POST /api/outillage/installer", s.api(s.installerOutillage))
+	mux.HandleFunc("POST /api/outillage/nmap", s.api(s.installerNmap))
+	mux.HandleFunc("POST /api/outillage/npcap", s.api(s.npcap))
 	srv := &http.Server{Handler: s.garde(mux), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
 	return fmt.Sprintf("http://%s/?jeton=%s", s.hote, s.jeton), srv, nil
@@ -147,6 +150,31 @@ func (s *Serveur) transmettre(*http.Request) (any, error) {
 
 func (s *Serveur) oublier(*http.Request) (any, error) {
 	if err := s.app.Oublier(); err != nil {
+		return nil, err
+	}
+	return s.app.Contexte(), nil
+}
+
+// installerOutillage : mise en place (ou contrôle) de l'outillage open source, en arrière-plan.
+func (s *Serveur) installerOutillage(*http.Request) (any, error) {
+	if err := s.app.InstallerOutillage(s.ctx); err != nil {
+		return nil, err
+	}
+	return s.app.Contexte(), nil
+}
+
+// installerNmap : téléchargement et vérification de l'installateur officiel, puis ouverture
+// interactive (fenêtre UAC) — uniquement sur clic explicite de l'utilisateur.
+func (s *Serveur) installerNmap(*http.Request) (any, error) {
+	if err := s.app.InstallerNmap(s.ctx); err != nil {
+		return nil, err
+	}
+	return s.app.Contexte(), nil
+}
+
+// npcap : ouvre la page officielle de Npcap (option des scans avancés).
+func (s *Serveur) npcap(*http.Request) (any, error) {
+	if err := s.app.OuvrirNpcap(); err != nil {
 		return nil, err
 	}
 	return s.app.Contexte(), nil
