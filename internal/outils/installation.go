@@ -144,7 +144,7 @@ func (g *Gestionnaire) Etat() []EtatOutil {
 			res = append(res, EtatOutil{Nom: o.Nom, Version: o.Version, Licence: o.Licence, Source: o.URL, Detail: err.Error()})
 			continue
 		}
-		res = append(res, x.Etat("vérifié (empreinte" + map[bool]string{true: " et signature", false: ""}[x.Signataire != ""] + ")"))
+		res = append(res, x.Etat("vérifié (empreinte"+map[bool]string{true: " et signature", false: ""}[x.Signataire != ""]+")"))
 		x.Fermer()
 	}
 	if err := g.verifierModeles(); err != nil {

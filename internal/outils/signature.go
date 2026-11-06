@@ -27,12 +27,12 @@ type contenuPKCS7 struct {
 }
 
 type donneesSignees struct {
-	Version       int
-	Algorithmes   asn1.RawValue
-	Encapsule     asn1.RawValue
-	Certificats   asn1.RawValue `asn1:"optional,tag:0"`
-	Revocations   asn1.RawValue `asn1:"optional,tag:1"`
-	Signataires   asn1.RawValue
+	Version     int
+	Algorithmes asn1.RawValue
+	Encapsule   asn1.RawValue
+	Certificats asn1.RawValue `asn1:"optional,tag:0"`
+	Revocations asn1.RawValue `asn1:"optional,tag:1"`
+	Signataires asn1.RawValue
 }
 
 type emetteurEtSerie struct {
