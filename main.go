@@ -8,8 +8,8 @@
 // Jamais : exploitation, test d'intrusion, force brute, essai de mot de passe, modification.
 //
 // Modes :
-//   - par défaut : fenêtre de logiciel native (WebView2) affichant l'interface servie en local
-//     (127.0.0.1, port aléatoire, jeton de session) ; aucune console, aucun onglet de navigateur ;
+//   - par défaut : fenêtre de logiciel NATIVE (Fyne, rendu OpenGL) : ni navigateur, ni vue web,
+//     ni serveur HTTP local ; aucune console ;
 //   - --cli      : déroulé complet en console (appairage, scan, transmission), sans interface ;
 //   - --demo     : réseau simulé (jeu « Usine de Brest »), appairage et transmission réels.
 package main
@@ -36,7 +36,7 @@ import (
 // version est renseignée à la compilation : -ldflags "-X main.version=1.0.0".
 var version = "dev"
 
-// La fenêtre native (WebView2) et sa boucle de messages doivent rester sur le fil principal.
+// La fenêtre native (Fyne / OpenGL) et sa boucle d'événements doivent rester sur le fil principal.
 func init() { runtime.LockOSThread() }
 
 func main() {
@@ -122,28 +122,10 @@ func executer() error {
 	return modeInterface(ctx, a, racine)
 }
 
-// modeInterface ouvre l'agent comme un logiciel : fenêtre native qui affiche l'interface locale.
-// Fermer la fenêtre arrête l'agent. Repli : navigateur (si aucune fenêtre native n'est possible).
-func modeInterface(ctx context.Context, a *app.App, racine string) error {
-	url, srv, err := ui.Demarrer(ctx, a)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		fin, annuler := context.WithTimeout(context.Background(), 3*time.Second)
-		defer annuler()
-		_ = srv.Shutdown(fin)
-	}()
-	if ui.OuvrirFenetre(url, racine) {
-		return nil // la fenêtre a été fermée par l'utilisateur
-	}
-	fmt.Println("CACyber-Agent", version, "— interface locale :", url)
-	fmt.Println("Laissez cette fenêtre ouverte pendant le scan ; Ctrl+C pour quitter.")
-	if err := ui.OuvrirNavigateur(url); err != nil {
-		fmt.Println("Ouvrez l'adresse ci-dessus dans votre navigateur.")
-	}
-	<-ctx.Done()
-	return nil
+// modeInterface ouvre l'agent comme un logiciel : fenêtre native, bloquante jusqu'à sa fermeture.
+// Fermer la fenêtre arrête l'agent (un scan en cours est interrompu proprement, rien n'est transmis).
+func modeInterface(ctx context.Context, a *app.App, _ string) error {
+	return ui.Lancer(ctx, a, ui.Options{Version: version})
 }
 
 // commandesOutillage : mise en place et contrôle de l'outillage open source (brief §12.2).
