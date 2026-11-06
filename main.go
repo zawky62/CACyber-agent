@@ -60,7 +60,7 @@ func executer() error {
 		dev          = flag.Bool("dev", false, "laboratoire : autorise le HTTP non chiffré hors de ce poste")
 		afficherVers = flag.Bool("version", false, "affiche la version et quitte")
 		reinit       = flag.Bool("reinitialiser", false, "oublie l'appairage de ce poste et quitte")
-		instOutils   = flag.Bool("installer-outils", false, "installe et vérifie l'outillage open source (osquery, Nuclei, modèles), exécute l'auto-test et quitte")
+		instOutils   = flag.Bool("installer-outils", false, "installe et vérifie l'outillage open source (osquery, signé par l'éditeur), exécute l'auto-test et quitte")
 		etatOutils   = flag.Bool("etat-outils", false, "contrôle l'outillage installé (empreintes, signatures) sans rien télécharger et quitte")
 		instNmap     = flag.Bool("installer-nmap", false, "télécharge l'installateur OFFICIEL de Nmap, le vérifie et l'ouvre en mode interactif (UAC) puis quitte")
 		npcap        = flag.Bool("npcap", false, "ouvre la page officielle de Npcap (option des scans avancés SYN/OS) puis quitte")
@@ -193,6 +193,12 @@ func modeConsole(ctx context.Context, a *app.App, racine string) error {
 		return errors.New("aucun mandat signé et valide ne couvre ce site : scan impossible")
 	}
 	fmt.Printf("Mandat valide jusqu'au %s. Lecture seule.\n", moi.MandatFin)
+	// Collectes complémentaires (annuaire, inventaire authentifié) : identifiants saisis ici, en mémoire.
+	comp, err := complementsDepuisOptions()
+	if err != nil {
+		return err
+	}
+	a.DefinirComplements(comp)
 
 	// Affichage du journal au fil de l'eau.
 	m := a.Mission()

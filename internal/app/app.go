@@ -81,7 +81,7 @@ type Contexte struct {
 	Demo    bool                `json:"demo"`
 	Version string              `json:"version"`
 	Mission *journal.Instantane `json:"mission,omitempty"`
-	// Outillage : mise en place des outils open source (Nmap, osquery, Nuclei) et auto-test.
+	// Outillage : mise en place des outils open source (Nmap, osquery, signés par leur éditeur) et auto-test.
 	Outillage EtatOutillage `json:"outillage"`
 }
 
@@ -167,6 +167,17 @@ func (a *App) Oublier() error {
 	}
 	a.etat, a.client, a.mission = nil, nil, nil
 	return nil
+}
+
+// DefinirComplements transmet à la mission les paramètres des collectes complémentaires (annuaire,
+// inventaire authentifié) ; les identifiants restent en mémoire et sont effacés après la collecte.
+func (a *App) DefinirComplements(c journal.Complements) {
+	a.mu.Lock()
+	m := a.mission
+	a.mu.Unlock()
+	if m != nil {
+		m.DefinirComplements(c)
+	}
 }
 
 // Mission courante (mode console).

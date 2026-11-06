@@ -39,6 +39,8 @@ type Politique struct {
 	// InclureFragiles : le mandat autorise explicitement l'examen des ports d'équipements fragiles
 	// (automates, impression) dans le profil industriel.
 	InclureFragiles bool `json:"inclure_fragiles"`
+	// CollecteAD : « ldap » (défaut, lecture seule) ou « aucune » (désactivée par le mandat).
+	CollecteAD string `json:"collecte_ad"`
 }
 
 // ScriptsAutorises renvoie l'intersection triée entre la demande du serveur et la liste

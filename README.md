@@ -70,10 +70,32 @@ ECDSA-SHA256 (DER, base64) de `MÉTHODE\nCHEMIN\nHORODATAGE\nsha256(corps)` (ant
 Certaines lectures exigent des droits d'administrateur : à défaut, elles sont notées « non lues »
 dans le journal, sans échec du scan.
 
+**Contrôles web passifs** (chaque service web découvert, sauf profil Industriel)
+- certificat présenté (expiré, autosigné, nom incorrect, autorité inconnue) ; suites de chiffrement
+  faibles acceptées (au plus 6 poignées de main par port) ;
+- une requête `GET /` sans redirection : en-têtes de sécurité, technologies annoncées.
+
+**osquery** (poste local, binaire signé par l'éditeur) : requêtes `SELECT` en liste blanche —
+BitLocker, centre de sécurité Windows (pare-feu, mises à jour, antivirus, UAC), nombre de programmes.
+
+**Annuaire Active Directory** (si le poste est membre d'un domaine, sauf `collecte_ad = aucune`)
+- LDAPS, sinon StartTLS ; jamais en clair ; liaison Kerberos/NTLM (SSPI) sous l'identité Windows
+  courante, ou avec le compte saisi par `--identifiants-ad` ;
+- comptes, groupes, ordinateurs, appartenances, indicateurs de compte, délégations, politique du
+  domaine, présence de LAPS (dates d'expiration seulement), DACL des objets (contrôle `SD_FLAGS`) ;
+- **jamais** : mots de passe LAPS, empreintes, demande de ticket de service, écriture.
+
+**Inventaire authentifié** (uniquement si l'entité saisit un compte, uniquement les hôtes du mandat)
+- Windows (WinRM HTTPS 5986, NTLM) : un script PowerShell de lecture figé (système, logiciels,
+  correctifs, administrateurs locaux, pare-feu, BitLocker, antivirus) ;
+- Linux (SSH 22) : cinq commandes de lecture figées ; empreinte de la clé d'hôte relevée,
+  `--ssh-known-hosts` pour refuser toute clé inconnue.
+
 ## Ce qui n'est JAMAIS fait
 
 Exploitation de faille, test d'intrusion, force brute, essai de mot de passe ou d'identifiant par
-défaut, envoi de charge, modification de configuration, écriture sur un équipement, scan UDP,
+défaut, envoi de charge, modification de configuration, lecture de secret de l'annuaire, demande de
+ticket Kerberos de service, enregistrement ou transmission d'un identifiant fourni par l'entité, écriture sur un équipement, scan UDP,
 script Nmap hors liste blanche, `--script-args`, catégorie de scripts, cible publique.
 Le serveur ne peut pas envoyer de commande : il ne fournit qu'une politique bornée, recoupée par la
 liste blanche compilée (un serveur compromis ne rend pas l'agent offensif).
@@ -93,13 +115,20 @@ CACCyber-Agent.exe --demo                           réseau simulé, appairage e
 | `--demo` | jeu de démonstration « Usine de Brest » |
 | `--cli` | mode console |
 | `--nmap CHEMIN` | exécutable Nmap (sinon `Program Files\Nmap`, puis PATH) ; signature de l'éditeur exigée sous Windows |
-| `--installer-outils` | installe et vérifie osquery, Nuclei et les modèles, exécute l'auto-test, écrit le bilan au journal |
+| `--installer-outils` | installe et vérifie osquery (signé par l'éditeur), exécute l'auto-test, écrit le bilan au journal |
 | `--etat-outils` | contrôle l'outillage (empreintes, signatures) sans rien télécharger |
 | `--installer-nmap` | télécharge l'installateur officiel de Nmap, le vérifie et l'ouvre en mode interactif (UAC) |
 | `--npcap` | ouvre la page officielle de Npcap (option des scans avancés) |
 | `--ca FICHIER` | épingle la CA attendue du serveur |
 | `--donnees DOSSIER` | dossier de l'agent (défaut `%ProgramData%\CACyber\Agent`) |
 | `--reinitialiser` | oublie l'appairage |
+| `--domaine-ad NOM` | domaine Active Directory à lire (défaut : celui du poste) |
+| `--identifiants-ad` | saisir (sans écho) un compte de domaine pour l'annuaire ; sinon identité Windows courante |
+| `--identifiants-windows` | saisir un compte d'administration Windows pour l'inventaire authentifié (WinRM) |
+| `--identifiants-linux` | saisir un compte SSH pour l'inventaire des serveurs Linux |
+| `--winrm-http` | autoriser WinRM sur HTTP 5985 (NTLM) si HTTPS est indisponible |
+| `--winrm-certificat-non-verifie` | accepter un certificat WinRM autosigné (déconseillé) |
+| `--ssh-known-hosts FICHIER` | refuser toute clé SSH absente du fichier de l'entité |
 | `--version` | version |
 
 ### Interface graphique native
@@ -181,8 +210,12 @@ empreintes).
 - Sans Nmap, le scanner natif fournit les ports, les bannières et les versions TLS, mais pas les versions
   SMB négociées.
 
-**osquery et Nuclei** sont installés pour l'utilisateur courant, sans droits administrateur, dans
-`%LOCALAPPDATA%\CACyber\outils`. Les outils sont lancés sans fenêtre de console.
+**osquery** est utilisé depuis son installation officielle (Program Files) si elle est présente et
+signée, sinon installé pour l'utilisateur courant, sans droits administrateur, dans
+`%LOCALAPPDATA%\CACyber\outils`. Les outils sont lancés sans fenêtre de console. **Seuls des composants
+signés par leur éditeur sont exécutés** (Nmap, osquery) ; Nuclei n'est plus utilisé (binaire non
+signé, classé « hacktool » par plusieurs EDR) : ses contrôles passifs TLS / en-têtes HTTP sont
+intégrés à l'agent. Voir `docs/EDR-LISTE-AUTORISATION.md`.
 
 **Antivirus**
 - Une compilation **non signée** de l'agent peut être signalée par un antivirus. C'est arrivé une fois

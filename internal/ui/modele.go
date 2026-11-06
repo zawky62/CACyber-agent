@@ -280,12 +280,6 @@ func NomAffiche(nom string) string {
 		return "Nmap"
 	case "osquery":
 		return "osquery"
-	case "nuclei":
-		return "Nuclei"
-	case "nuclei-templates", "modeles", "modèles":
-		return "Modèles Nuclei"
-	case "sharphound":
-		return "SharpHound"
 	case "auto-test":
 		return "Auto-test (127.0.0.1)"
 	default:

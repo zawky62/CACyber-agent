@@ -24,3 +24,6 @@ func lancerInstallateur(string) error {
 }
 
 func sansFenetre(*exec.Cmd) {}
+
+// DomaineJoint : hors Windows, la jonction à un domaine AD n'est pas détectée (collecte ignorée).
+func DomaineJoint() bool { return false }
