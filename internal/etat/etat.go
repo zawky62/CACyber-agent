@@ -127,6 +127,11 @@ func (d *Dossier) Charger() (*Etat, error) {
 	if err := json.Unmarshal(data, &e); err != nil {
 		return nil, fmt.Errorf("etat.json illisible : %w", err)
 	}
+	// Appairage de l'ancienne génération (TLS mutuel vers un serveur local) : incompatible avec le serveur
+	// actuel (signature de chaque requête). Considéré comme absent : l'agent redemande un code d'appairage.
+	if e.URLMTLS != "" {
+		return nil, nil
+	}
 	// Seule la clé privée est indispensable (le serveur authentifie l'agent par signature de chaque
 	// requête) ; certificat et CA ne sont plus produits depuis l'abandon du TLS mutuel.
 	for _, f := range []string{d.CheminCle()} {
