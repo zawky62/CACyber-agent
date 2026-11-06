@@ -37,14 +37,12 @@ func TestEcransEtCaptures(t *testing.T) {
 	etats := []outils.EtatOutil{
 		{Nom: "nmap", Version: "7.80", Licence: "NPSL", Source: "nmap.org", Signataire: "Insecure.Com LLC", Pret: true, Detail: "installation du poste, signature vérifiée", SHA256: "61f79af8c0ffee"},
 		{Nom: "osquery", Version: "5.24.1", Licence: "Apache-2.0", Source: "github.com/osquery", Signataire: "OSQUERY a Series of LF Projects, LLC", Pret: true},
-		{Nom: "nuclei", Version: "3.11.1", Licence: "MIT", Source: "github.com/projectdiscovery", Pret: true, Detail: "empreinte SHA-256 vérifiée"},
-		{Nom: "sharphound", Licence: "GPL-3.0", Source: "github.com/SpecterOps"},
 	}
 	outillagePret := app.EtatOutillage{Statut: app.OutillagePret, Journal: `C:\ProgramData\CACyber\Agent\journaux\outillage-20261106.log`,
 		Rapport: &outils.Rapport{Pret: true, Message: "Moteur de scan prêt.", Tests: []outils.ResultatTest{
 			{Outil: "nmap", OK: true, Detail: "mini-scan de 127.0.0.1 réussi (mode connect) : ports 135, 445"},
 			{Outil: "osquery", OK: true, Detail: "inventaire en lecture seule opérationnel (5 logiciels lus)"},
-			{Outil: "nuclei", OK: true, Detail: "moteur 3.11.1 ; 9 modèles validés"},
+			{Outil: "web", OK: true, Detail: "contrôles TLS et en-têtes intégrés opérationnels"},
 		}}}
 
 	cas := []struct {

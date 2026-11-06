@@ -4,6 +4,7 @@ package ui
 // paramètres. Chaque écran est reprenable : il se reconstruit à partir de l'état de l'agent.
 
 import (
+	"os"
 	"errors"
 	"fmt"
 	"image/color"
@@ -345,6 +346,7 @@ func (ui *Interface) ecranOutillage() fyne.CanvasObject {
 			"signature de l'éditeur) avant chaque exécution. Aucun droit administrateur n'est nécessaire : Nmap fonctionne en mode « connect »."),
 		bandeau,
 		carte(sousTitre("Composants"), lignes, container.NewHBox(nmap, layout.NewSpacer(), installer)),
+		modulesIntegres(),
 		carte(sousTitre("Auto-test de bon fonctionnement"), tests),
 		carte(sousTitre("Option : scans avancés (Npcap)"),
 			discret("Facultatif. Utile seulement pour les scans SYN et l'empreinte du système ; demande une validation administrateur (UAC)."),
@@ -723,4 +725,34 @@ func valeur(s, d string) string {
 		return d
 	}
 	return s
+}
+
+// modulesIntegres : contrôles réalisés par le code de l'agent lui-même (rien à télécharger, rien à
+// signer en plus : ils font partie de l'exécutable CACyber). Affichés pour que l'utilisateur sache
+// exactement ce qui sera examiné, en lecture seule.
+func modulesIntegres() fyne.CanvasObject {
+	domaine := strings.TrimSpace(os.Getenv("USERDNSDOMAIN"))
+	ad := "Poste hors domaine Active Directory : collecte non applicable ici."
+	if domaine != "" {
+		ad = "Poste membre du domaine " + domaine + " : collecte possible (LDAP chiffré, lecture seule)."
+	}
+	ligne := func(nom, detail string) fyne.CanvasObject {
+		return container.NewVBox(
+			widget.NewLabelWithStyle(nom, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			discret(detail),
+		)
+	}
+	return carte(sousTitre("Modules d'audit intégrés (inclus dans l'agent)"),
+		ligne("Active Directory — chemins d'attaque façon BloodHound",
+			"Comptes, groupes, délégations et droits (ACL) lus en LDAP ; les chemins vers les administrateurs du domaine "+
+				"sont calculés par le serveur CACyber. "+ad),
+		ligne("Contrôles web et TLS",
+			"Certificats, versions TLS et chiffrements faibles, en-têtes de sécurité, technologies annoncées."),
+		ligne("Inventaire authentifié WinRM / SSH",
+			"Logiciels, correctifs, pare-feu, chiffrement des postes, avec les identifiants fournis par l'entité "+
+				"(gardés en mémoire, jamais enregistrés)."),
+		ligne("Scripts Nmap (liste blanche « safe »)",
+			"banner, nbstat, smb-protocols, smb2-security-mode, smb-os-discovery, ftp-anon, rdp-enum-encryption, "+
+				"ssh2-enum-algos, http-title, http-auth. Jamais de script intrusif, d'attaque ou de force brute."),
+	)
 }
