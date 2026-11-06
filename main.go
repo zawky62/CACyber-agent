@@ -50,7 +50,7 @@ func main() {
 
 func executer() error {
 	var (
-		serveur      = flag.String("serveur", "http://localhost:8000", "adresse de la plateforme CACyber (appairage)")
+		serveur      = flag.String("serveur", "https://xqecfhmrzrqbpcxjcgmm.supabase.co/functions/v1", "adresse du serveur CACyber (fonctions Supabase)")
 		code         = flag.String("code", "", "code d'appairage CACC-XXXX-XXXX-XXXX-XXXX (appairage non interactif)")
 		demo         = flag.Bool("demo", false, "mode démonstration : réseau simulé, appairage et transmission réels")
 		cli          = flag.Bool("cli", false, "mode console, sans interface graphique")
