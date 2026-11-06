@@ -26,3 +26,19 @@ func TestDatesRelatives(t *testing.T) {
 		t.Fatalf("sauvegarde : %s", d)
 	}
 }
+
+// Le jeu de démonstration contient un domaine Active Directory fictif (BREST.LOCAL), dates résolues.
+func TestAnnuaireDemo(t *testing.T) {
+	o, err := Observations(time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.AD == nil || o.AD.Domaine.Nom != "BREST.LOCAL" || len(o.AD.Noeuds) < 15 || len(o.AD.Aretes) < 10 {
+		t.Fatalf("annuaire de démonstration attendu : %+v", o.AD)
+	}
+	for _, n := range o.AD.Noeuds {
+		if n.N == "krbtgt" && (n.MdpChange == nil || *n.MdpChange != "2021-08-24") { // 6 nov. 2026 − 1900 jours
+			t.Fatalf("date relative du krbtgt mal résolue : %v", n.MdpChange)
+		}
+	}
+}
